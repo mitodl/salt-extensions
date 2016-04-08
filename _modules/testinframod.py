@@ -22,15 +22,10 @@ except ImportError:
 
 __virtualname__ = 'testinfra'
 default_backend = 'local://'
-comparisons = {
-    'lt': operator.eq,
-    'le': operator.le,
-    'eq': operator.eq,
-    'ne': operator.ne,
-    'ge': operator.ge,
-    'gt': operator.gt
-}
 
+
+class InvalidArgumentError(Exception):
+    pass
 
 def __virtual__():
     if TESTINFRA_PRESENT:
@@ -61,8 +56,11 @@ def _to_pascal_case(snake_case):
 
     """
     space_case = re.sub('_', ' ', snake_case)
-    return re.sub('(^|\s+)([a-z])', lambda match: match.group(2).upper(),
-                         space_case)
+    wordlist = []
+    for word in space_case.split():
+        wordlist.append(word[0].upper())
+        wordlist.append(word[1:])
+    return ''.join(wordlist)
 
 
 def _to_snake_case(pascal_case):
@@ -74,12 +72,13 @@ def _to_snake_case(pascal_case):
 
     """
     snake_case = re.sub('(^|[a-z])([A-Z])',
-                        lambda match: '_{0}'.format(match.group(2).lower()),
+                        lambda match: '{0}_{1}'.format(match.group(1).lower(),
+                                                       match.group(2).lower()),
                         pascal_case)
     return snake_case.lower().strip('_')
 
 
-def _get_method_result(module, module_instance, method_name, method_arg=None):
+def _get_method_result(module_, module_instance, method_name, method_arg=None):
     """Given a TestInfra module object, an instance of that module, and a
     method name, return the result of executing that method against the
     desired module.
@@ -92,21 +91,32 @@ def _get_method_result(module, module_instance, method_name, method_arg=None):
     :rtype: variable
 
     """
-    callable = getattr(module, method_name)
-    log.debug(callable)
-    if isinstance(callable, property):
-        result = callable.fget(module_instance)
+    try:
+        method_obj = getattr(module_, method_name)
+    except AttributeError:
+        raise InvalidArgumentError('The {0} module does not have any property'
+                                   ' or method named {1}'.format(
+                                       module_.__name__, method_name))
+    if isinstance(method_obj, property):
+        return method_obj.fget(module_instance)
     else:
+        if not method_arg:
+            raise InvalidArgumentError('{0} is a method of the {1} module. An '
+                                       'argument dict is required.'
+                                       .format(method_name,
+                                               module_.__name__))
         try:
-            result = getattr(module_instance,
+            return getattr(module_instance,
                              method_name)(method_arg['parameter'])
         except KeyError:
-            log.exception('')
-    return result
+            raise InvalidArgumentError('The argument dict supplied has no '
+                                       'key named "parameter": {0}'
+                                       .format(method_arg))
+    return None
 
 
 def _apply_assertion(expected, result):
-    """Given the result of a method, verify that it matches the expecation.
+    """Given the result of a method, verify that it matches the expectation.
 
     This is done by either passing a boolean value as an expecation or a
     dictionary with the expected value and a string representing the desired
@@ -119,51 +129,53 @@ def _apply_assertion(expected, result):
     :rtype: bool
 
     """
+    log.debug('Expected result: %s. Actual result: %s', (expected, result))
     if isinstance(expected, bool):
         return result is expected
     elif isinstance(expected, dict):
-        if isinstance(expected['match'], bool):
-            return result is expected['match']
-        else:
-            return comparisons[expected['comparison']](result,
-                                                      expected['match'])
+        try:
+            return getattr(operator, expected['comparison'])(
+                expected['expected'], result)
+        except KeyError:
+            log.exception('The comparison dictionary provided is missing '
+                          'expected keys. Either "expected" or "comparison" '
+                          'are not present.')
+            raise
     else:
         raise TypeError('Expected bool or dict but received {}'
                         .format(type(expected)))
 
 
 def run_tests(name, **methods):
-    log.debug(name)
     success = True
-    msgs = []
+    pass_msgs = []
+    fail_msgs = []
     mod_name = methods['__pub_fun'].split('.')[1]
     try:
         mod = _get_module(mod_name)
     except NotImplementedError:
-        log.exception('The {} module is not supported on this platform.'
-                      .format(module_name))
+        log.exception('The %s module is not supported for this backend and/or'
+                      ' platform.', mod_name)
+        success = False
+        return success, pass_msgs, fail_msgs
     modinstance = mod(name)
     methods = {meth_name: methods[meth_name] for meth_name in methods if not
                meth_name.startswith('_')}
-    log.debug(methods)
     for meth, arg in methods.items():
         result = _get_method_result(mod, modinstance, meth)
-        log.debug(result)
         assertion_result = _apply_assertion(arg, result)
         if not assertion_result:
             success = False
-            msgs.append('Assertion failed: {modname} {n} {m} {a}. '
+            fail_msgs.append('Assertion failed: {modname} {n} {m} {a}. '
                         'Actual result: {r}'.format(
                             modname=mod_name, n=name, m=meth, a=arg, r=result
-                        )
-            )
+                        ))
         else:
-            msgs.append('Assertion passed:  {modname} {n} {m} {a}. '
+            pass_msgs.append('Assertion passed:  {modname} {n} {m} {a}. '
                         'Actual result: {r}'.format(
                             modname=mod_name, n=name, m=meth, a=arg, r=result
-                        )
-            )
-    return success, '\n'.join(msgs)
+                        ))
+    return success, pass_msgs, fail_mssgs
 
 
 def _copy_function(func, name=None):
@@ -173,10 +185,10 @@ def _copy_function(func, name=None):
                               func.__defaults__,
                               func.__closure__)
 
-def _build_doc(module):
-    return module.__doc__
+def _build_doc(module_):
+    return module_.__doc__
 
-for module in modules.__all__:
+for module_ in modules.__all__:
     mod_func = _copy_function(run_tests)
-    mod_func.__doc__ = _build_doc(module)
-    globals()[_to_snake_case(module)] = mod_func
+    mod_func.__doc__ = _build_doc(module_)
+    globals()[_to_snake_case(module_)] = mod_func

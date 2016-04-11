@@ -3,13 +3,16 @@
 This module exposes the functionality of the TestInfra library
 for use with SaltStack in order to verify the state of your minions.
 """
-import re
 import inspect
-import operator
-import types
-
-import salt.utils
 import logging
+import operator
+import re
+import types
+from functools import partial
+
+import salt.exceptions
+import salt.utils
+
 log = logging.getLogger(__name__)
 
 try:
@@ -20,12 +23,16 @@ except ImportError:
     log.debug('Unable to import TestInfra')
     TESTINFRA_PRESENT = False
 
+__all__ = []
+
+
 __virtualname__ = 'testinfra'
 default_backend = 'local://'
 
 
 class InvalidArgumentError(Exception):
     pass
+
 
 def __virtual__():
     if TESTINFRA_PRESENT:
@@ -112,6 +119,10 @@ def _get_method_result(module_, module_instance, method_name, method_arg=None):
             raise InvalidArgumentError('The argument dict supplied has no '
                                        'key named "parameter": {0}'
                                        .format(method_arg))
+        except AttributeError:
+            raise InvalidArgumentError('The {0} module does not have any '
+                                       'property or method named {1}'.format(
+                                           module_.__name__, method_name))
     return None
 
 
@@ -129,7 +140,7 @@ def _apply_assertion(expected, result):
     :rtype: bool
 
     """
-    log.debug('Expected result: %s. Actual result: %s', (expected, result))
+    log.debug('Expected result: %s. Actual result: %s', expected, result)
     if isinstance(expected, bool):
         return result is expected
     elif isinstance(expected, dict):
@@ -146,49 +157,76 @@ def _apply_assertion(expected, result):
                         .format(type(expected)))
 
 
-def run_tests(name, **methods):
-    success = True
-    pass_msgs = []
-    fail_msgs = []
-    mod_name = methods['__pub_fun'].split('.')[1]
-    try:
-        mod = _get_module(mod_name)
-    except NotImplementedError:
-        log.exception('The %s module is not supported for this backend and/or'
-                      ' platform.', mod_name)
-        success = False
-        return success, pass_msgs, fail_msgs
-    modinstance = mod(name)
-    methods = {meth_name: methods[meth_name] for meth_name in methods if not
-               meth_name.startswith('_')}
-    for meth, arg in methods.items():
-        result = _get_method_result(mod, modinstance, meth)
-        assertion_result = _apply_assertion(arg, result)
-        if not assertion_result:
+def _build_doc(module_):
+    return module_.__doc__
+
+
+def _copy_function(module_name, name=None):
+    log.debug('Generating function for %s module', module_name)
+    def _run_tests(name, **methods):
+        success = True
+        pass_msgs = []
+        fail_msgs = []
+        try:
+            log.debug('Retrieving %s module.', module_name)
+            mod = _get_module(module_name)
+            log.debug('Retrieved module is %s', mod.__dict__)
+        except NotImplementedError:
+            log.exception(
+                'The %s module is not supported for this backend and/or '
+                'platform.', module_name)
             success = False
-            fail_msgs.append('Assertion failed: {modname} {n} {m} {a}. '
-                        'Actual result: {r}'.format(
-                            modname=mod_name, n=name, m=meth, a=arg, r=result
-                        ))
+            return success, pass_msgs, fail_msgs
+        if hasattr(inspect, 'signature'):
+            mod_sig = inspect.signature(mod)
+            parameters = mod_sig.parameters.keys()
         else:
-            pass_msgs.append('Assertion passed:  {modname} {n} {m} {a}. '
-                        'Actual result: {r}'.format(
-                            modname=mod_name, n=name, m=meth, a=arg, r=result
-                        ))
-    return success, pass_msgs, fail_mssgs
-
-
-def _copy_function(func, name=None):
+            if isinstance(mod.__init__, types.MethodType):
+                mod_sig = inspect.getargspec(mod.__init__)
+            elif hasattr(mod, '__call__'):
+                mod_sig = inspect.getargspec(mod.__call__)
+            parameters = mod_sig.args
+        additional_args = {arg: methods.pop(arg) for arg in
+                           set(parameters).intersection(set(methods.keys()))}
+        try:
+            if len(parameters) > 1:
+                modinstance = mod(name, **additional_args)
+            else:
+                modinstance = mod()
+        except TypeError:
+            modinstance = None
+        methods = {meth_name: methods[meth_name] for meth_name in methods if not
+                   meth_name.startswith('_')}
+        for meth, arg in methods.items():
+            result = _get_method_result(mod, modinstance, meth, arg)
+            assertion_result = _apply_assertion(arg, result)
+            if not assertion_result:
+                success = False
+                fail_msgs.append('Assertion failed: {modname} {n} {m} {a}. '
+                            'Actual result: {r}'.format(
+                                modname=module_name, n=name, m=meth, a=arg, r=result
+                            ))
+            else:
+                pass_msgs.append('Assertion passed:  {modname} {n} {m} {a}. '
+                            'Actual result: {r}'.format(
+                                modname=module_name, n=name, m=meth, a=arg, r=result
+                            ))
+        return success, pass_msgs, fail_msgs
+    func = _run_tests
     return types.FunctionType(func.__code__,
                               func.__globals__,
                               name or func.__name__,
                               func.__defaults__,
                               func.__closure__)
 
-def _build_doc(module_):
-    return module_.__doc__
 
-for module_ in modules.__all__:
-    mod_func = _copy_function(run_tests)
-    mod_func.__doc__ = _build_doc(module_)
-    globals()[_to_snake_case(module_)] = mod_func
+def _generate_functions():
+    for module_ in modules.__all__:
+        mod_name = _to_snake_case(module_)
+        mod_func = _copy_function(mod_name, str(mod_name))
+        mod_func.__doc__ = _build_doc(module_)
+        __all__.append(mod_name)
+        globals()[mod_name] = mod_func
+
+
+_generate_functions()

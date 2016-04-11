@@ -1,5 +1,5 @@
 from salttesting import TestCase
-from _modules import testinframod
+from extensions._modules import testinframod
 
 
 class TestinframodTestCase(TestCase):
@@ -119,11 +119,6 @@ class TestinframodTestCase(TestCase):
 
 
     def test_copy_function(self):
-        def test_func():
-            """This doesn't do much"""
-            return 'foobar'
-        new_func = testinframod._copy_function(test_func, name='foo_func')
-        self.assertEqual(test_func(), new_func())
-        self.assertEqual(test_func.__doc__, new_func.__doc__)
-        new_func.__doc__ = "This still doesn't do much"
-        self.assertNotEqual(test_func.__doc__, new_func.__doc__)
+        new_func = testinframod._copy_function('package', name='foo_func')
+        self.assertEqual(str(new_func.__closure__[0].cell_contents),
+                         str('package'))

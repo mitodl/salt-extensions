@@ -98,20 +98,24 @@ def _get_method_result(module_, module_instance, method_name, method_arg=None):
     :rtype: variable
 
     """
+    log.debug('Trying to call %s on %s', method_name, module_)
     try:
         method_obj = getattr(module_, method_name)
     except AttributeError:
-        raise InvalidArgumentError('The {0} module does not have any property'
-                                   ' or method named {1}'.format(
-                                       module_.__name__, method_name))
+        try:
+            method_obj = getattr(module_instance, method_name)
+        except AttributeError:
+            raise InvalidArgumentError('The {0} module does not have any '
+                                       'property or method named {1}'.format(
+                                           module_, method_name))
     if isinstance(method_obj, property):
         return method_obj.fget(module_instance)
-    else:
+    elif isinstance(method_obj, (types.MethodType, types.FunctionType)):
         if not method_arg:
             raise InvalidArgumentError('{0} is a method of the {1} module. An '
                                        'argument dict is required.'
                                        .format(method_name,
-                                               module_.__name__))
+                                               module_))
         try:
             return getattr(module_instance,
                              method_name)(method_arg['parameter'])
@@ -122,7 +126,9 @@ def _get_method_result(module_, module_instance, method_name, method_arg=None):
         except AttributeError:
             raise InvalidArgumentError('The {0} module does not have any '
                                        'property or method named {1}'.format(
-                                           module_.__name__, method_name))
+                                           module_, method_name))
+    else:
+        return method_obj
     return None
 
 

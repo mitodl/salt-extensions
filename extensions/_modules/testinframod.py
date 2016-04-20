@@ -146,7 +146,7 @@ def _apply_assertion(expected, result):
     elif isinstance(expected, dict):
         try:
             return getattr(operator, expected['comparison'])(
-                expected['expected'], result)
+                result, expected['expected'])
         except KeyError:
             log.exception('The comparison dictionary provided is missing '
                           'expected keys. Either "expected" or "comparison" '

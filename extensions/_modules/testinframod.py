@@ -132,7 +132,8 @@ def _apply_assertion(expected, result):
     This is done by either passing a boolean value as an expecation or a
     dictionary with the expected value and a string representing the desired
     comparison, as defined in the `operator module <https://docs.python.org/2.7/library/operator.html>`_
-    (e.g. 'eq', 'ge', etc.).
+    (e.g. 'eq', 'ge', etc.). The ``re.search`` function is also available with
+    a comparison value of ``search``.
 
     :param expected: boolean or dict
     :param result: return value of :ref: `_get_method_result`
@@ -145,13 +146,20 @@ def _apply_assertion(expected, result):
         return result is expected
     elif isinstance(expected, dict):
         try:
-            return getattr(operator, expected['comparison'])(
-                expected['expected'], result)
+            comparison = getattr(operator, expected['comparison'])
+        except AttributeError:
+            if expected.get('comparison') == 'search':
+                comparison = re.search
+            else:
+                raise InvalidArgumentError('Comparison {0} is not a valid '
+                                           'selection.'.format(
+                                               expected.get('comparison')))
         except KeyError:
             log.exception('The comparison dictionary provided is missing '
                           'expected keys. Either "expected" or "comparison" '
                           'are not present.')
             raise
+        return comparison(expected['expected'], result)
     else:
         raise TypeError('Expected bool or dict but received {}'
                         .format(type(expected)))

@@ -10,7 +10,7 @@ import inspect
 from functools import wraps
 
 log = logging.getLogger(__name__)
-EXCLUDED_HVAC_FUNCTIONS = ['initialize', 'list']
+EXCLUDED_HVAC_FUNCTIONS = ['initialize']
 
 try:
     import hvac
@@ -133,6 +133,9 @@ def _register_functions():
             method = getattr(hvac.Client, method_name)
             if (not isinstance(method, property) and
                   method_name not in EXCLUDED_HVAC_FUNCTIONS):
+                if method_name == 'list':
+                    method_name = 'list_values'
                 globals()[method_name] = _bind_client(method)
 
-_register_functions()
+if DEPS_INSTALLED:
+    _register_functions()

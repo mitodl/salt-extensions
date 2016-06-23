@@ -2,16 +2,16 @@
 """
 This module exposes the functionality of the TestInfra library
 for use with SaltStack in order to verify the state of your minions.
+In order to allow for the addition of new resource types in TestInfra this
+module dynamically generates wrappers for the various resources by iterating
+over the values in the ``__all__`` variable exposed by the testinfra.modules
+namespace.
 """
 import inspect
 import logging
 import operator
 import re
 import types
-from functools import partial
-
-import salt.exceptions
-import salt.utils
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +20,6 @@ try:
     from testinfra import modules
     TESTINFRA_PRESENT = True
 except ImportError:
-    log.debug('Unable to import TestInfra')
     TESTINFRA_PRESENT = False
 
 __all__ = []
@@ -37,7 +36,7 @@ class InvalidArgumentError(Exception):
 def __virtual__():
     if TESTINFRA_PRESENT:
         return __virtualname__
-    return False
+    return False, 'The Testinfra package is not available'
 
 
 def _get_module(module_name, backend=default_backend):
@@ -167,16 +166,58 @@ def _apply_assertion(expected, result):
             raise
         return comparison(expected['expected'], result)
     else:
-        raise TypeError('Expected bool or dict but received {}'
+        raise TypeError('Expected bool or dict but received {0}'
                         .format(type(expected)))
 
 
+# This does not currently generate documentation from the underlying modules
 def _build_doc(module_):
     return module_.__doc__
 
 
 def _copy_function(module_name, name=None):
+    """
+    This will generate a function that is registered as either ``module_name``
+    or ``name``. The contents of the function will be ``_run_tests``. This
+    will translate the Testinfra module into a salt function and the methods
+    and properties of that module will be exposed as attributes of the salt
+    function that is generated. This allows for writing unit tests for a
+    configured minion using states in the same way as it is configured
+
+    Example:
+
+    ```yaml
+    minion_is_installed:
+      testinfra.package:
+        - name: salt-minion
+        - is_installed: True
+
+    minion_is_running:
+      testinfra.service:
+        - name: salt-minion
+        - is_running: True
+        - is_enabled: True
+
+    file_has_contents:
+      testinfra.file:
+        - name: /etc/salt/minion
+        - exists: True
+        - contains:
+            parameter: master
+            expected: True
+            comparison: is_
+
+    python_is_v2:
+      testinfra.package:
+        - name: python
+        - is_installed: True
+        - version:
+            expected: '2.7.9-1'
+            comparison: eq
+    ```
+    """
     log.debug('Generating function for %s module', module_name)
+
     def _run_tests(name, **methods):
         success = True
         pass_msgs = []
@@ -200,8 +241,9 @@ def _copy_function(module_name, name=None):
             elif hasattr(mod, '__call__'):
                 mod_sig = inspect.getargspec(mod.__call__)
             parameters = mod_sig.args
-        additional_args = {arg: methods.pop(arg) for arg in
-                           set(parameters).intersection(set(methods.keys()))}
+        additional_args = {}
+        for arg in set(parameters).intersection(set(methods.keys())):
+            additional_args[arg] = methods.pop(arg)
         try:
             if len(parameters) > 1:
                 modinstance = mod(name, **additional_args)
@@ -209,8 +251,10 @@ def _copy_function(module_name, name=None):
                 modinstance = mod()
         except TypeError:
             modinstance = None
-        methods = {meth_name: methods[meth_name] for meth_name in methods if not
-                   meth_name.startswith('_')}
+        methods = {}
+        for meth_name in methods:
+            if not meth_name.startswith('_'):
+                methods[meth_name] = methods[meth_name]
         for meth, arg in methods.items():
             result = _get_method_result(mod, modinstance, meth, arg)
             assertion_result = _apply_assertion(arg, result)
@@ -234,7 +278,12 @@ def _copy_function(module_name, name=None):
                               func.__closure__)
 
 
-def _generate_functions():
+def _register_functions():
+    """
+    Iterate through the exposed Testinfra modules, convert them to salt
+    functions, and then register them in the module namespace so that they
+    can be called via salt.
+    """
     for module_ in modules.__all__:
         mod_name = _to_snake_case(module_)
         mod_func = _copy_function(mod_name, str(mod_name))
@@ -243,4 +292,5 @@ def _generate_functions():
         globals()[mod_name] = mod_func
 
 
-_generate_functions()
+if TESTINFRA_PRESENT:
+    _register_functions()

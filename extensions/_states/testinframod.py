@@ -1,8 +1,8 @@
+# -*- coding: utf-8 -*-
 from __future__ import absolute_import
 
 import re
 import logging
-from functools import partial
 
 log = logging.getLogger(__name__)
 
@@ -10,7 +10,6 @@ try:
     from testinfra import modules
     TESTINFRA_PRESENT = True
 except ImportError:
-    log.debug('Unable to import TestInfra')
     TESTINFRA_PRESENT = False
 
 __all__ = []
@@ -20,7 +19,7 @@ __virtualname__ = 'testinfra'
 def __virtual__():
     if TESTINFRA_PRESENT:
         return __virtualname__
-    return False
+    return False, 'The Testinfra package is not available'
 
 
 def _wrap_module_function(func_name):
@@ -62,4 +61,5 @@ def _generate_functions():
         globals()[module_name] = _wrap_module_function(func_name)
 
 
-_generate_functions()
+if TESTINFRA_PRESENT:
+    _generate_functions()

@@ -29,6 +29,17 @@ def __virtual__():
     return DEPS_INSTALLED
 
 
+def _cache_client(client_builder):
+    _client = []
+    @wraps(client_builder)
+    def get_client(*args, **kwargs):
+        if not _client:
+            _client.append(client_builder(*args, **kwargs))
+        return _client[0]
+    return get_client
+
+
+@_cache_client
 def _build_client(url='https://localhost:8200', token=None, cert=None,
                   verify=True, timeout=30, proxies=None, allow_redirects=True,
                   session=None):
@@ -112,17 +123,18 @@ def initialize(secret_shares=5, secret_threshold=3, pgp_keys=None,
         if pgp_keys and unseal:
             log.debug('Regenerating PGP encrypted keys and backing them up.')
             log.debug('PGP keys: {}'.format(pgp_keys))
+            client.token = root_token
             _rekey(secret_shares, secret_threshold, sealing_keys,
                    pgp_keys, root_token)
-            client = _build_client(token=root_token)
             encrypted_sealing_keys = client.get_backed_up_keys()['keys']
             if encrypted_sealing_keys:
                 sealing_keys = encrypted_sealing_keys
     except hvac.exceptions.VaultError as e:
-        ret['message'] = ('Vault was initialized but PGP keys were not able to'
-                          ' be generated after unsealing.')
+        log.error('Vault was initialized but PGP encrypted keys were not able to'
+                  ' be generated after unsealing.')
         log.debug('Failed to rekey and backup the sealing keys.')
         log.exception(e)
+    client.token = root_token
     return success, sealing_keys, root_token
 
 

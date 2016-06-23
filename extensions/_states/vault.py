@@ -49,18 +49,18 @@ def initialized(name, secret_shares=5, secret_threshold=3, pgp_keys=None,
             }
         }
         ret['comment'] = 'Vault has {}initialized'.format(
-            '' if success else 'not ')
+            '' if success else 'failed to be ')
     return ret
 
 
-def auth_backend_enabled(backend_type, description='', mount_point=None):
+def auth_backend_enabled(name, backend_type, description='', mount_point=None):
     backends = __salt__['vault.list_auth_backends']()
     setting_dict = {'type': backend_type, 'description': description}
     backend_enabled = False
     ret = {'name': name,
            'comment': '',
            'result': '',
-           'changes': {'auth_backends': {'old': backends}}}
+           'changes': {'old': backends}}
 
     for path, settings in __salt__['vault.list_auth_backends']().items():
         if (path.strip('/') == mount_point or backend_type and
@@ -80,7 +80,7 @@ def auth_backend_enabled(backend_type, description='', mount_point=None):
                                                   description=description,
                                                   mount_point=mount_point)
             ret['result'] = True
-            ret['changes']['backends']['new'] = __salt__[
+            ret['changes']['new'] = __salt__[
                 'vault.list_auth_backends']()
         except hvac.exceptions.VaultError as e:
             ret['result'] = False
@@ -91,7 +91,7 @@ def auth_backend_enabled(backend_type, description='', mount_point=None):
     return ret
 
 
-def audit_backend_enabled(backend_type, description='', options=None,
+def audit_backend_enabled(name, backend_type, description='', options=None,
                           mount_point=None):
     backends = __salt__['vault.list_audit_backends']()
     setting_dict = {'type': backend_type, 'description': description}

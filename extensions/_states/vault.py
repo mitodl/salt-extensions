@@ -92,14 +92,16 @@ def auth_backend_enabled(name, backend_type, description='', mount_point=None):
 
 
 def audit_backend_enabled(name, backend_type, description='', options=None,
-                          mount_point=None):
+                          backend_name=None):
+    if not backend_name:
+        backend_name = backend_type
     backends = __salt__['vault.list_audit_backends']()
     setting_dict = {'type': backend_type, 'description': description}
     backend_enabled = False
     ret = {'name': name,
            'comment': '',
            'result': '',
-           'changes': {'audit_backends': {'old': backends}}}
+           'changes': {'old': backends}}
 
     for path, settings in __salt__['vault.list_audit_backends']().items():
         if (path.strip('/') == mount_point or backend_type and
@@ -116,21 +118,21 @@ def audit_backend_enabled(name, backend_type, description='', options=None,
     else:
         try:
             __salt__['vault.enable_audit_backend'](backend_type,
-                                                  description=description,
-                                                  mount_point=mount_point)
+                                                   description=description,
+                                                   name=backend_name)
             ret['result'] = True
-            ret['changes']['backends']['new'] = __salt__[
+            ret['changes']['new'] = __salt__[
                 'vault.list_audit_backends']()
-            ret['comment'] = ('The {backend} has been successfully mounted at '
-                              '{mount}.'.format(backend=backend_type,
-                                                mount=mount_point))
+            ret['comment'] = ('The {backend} audit backend has been '
+                              'successfully enabled.'.format(
+                                  backend=backend_type))
         except hvac.exceptions.VaultError as e:
             ret['result'] = False
             log.exception(e)
     return ret
 
 
-def app_id_created(app_id, policies, display_name=None, mount_point='app-id',
+def app_id_created(name, app_id, policies, display_name=None, mount_point='app-id',
                    **kwargs):
     ret = {'name': app_id,
            'comment': '',
@@ -207,14 +209,14 @@ def policy_created(name, rules):
     return ret
 
 
-def ec2_role_created(role, bound_ami_id, role_tag=None, max_ttl=None,
+def ec2_role_created(name, role, bound_ami_id, role_tag=None, max_ttl=None,
                      policies=None, allow_instance_migration=False,
                      disallow_reauthentication=False):
     try:
         current_role = __salt__['vault.get_ec2_role'](role)
-    except hvac.exceptions.InvalidRequest:
+    except (hvac.exceptions.InvalidRequest, hvac.exceptions.InvalidPath):
         current_role = None
-    ret = {'name': role,
+    ret = {'name': name,
            'comment': '',
            'result': False,
            'changes': {}}
@@ -235,8 +237,7 @@ def ec2_role_created(role, bound_ami_id, role_tag=None, max_ttl=None,
             __salt__['vault.create_ec2_role'](role, bound_ami_id, role_tag,
                                               max_ttl, policies,
                                               allow_instance_migration,
-                                              disallow_reauthentication,
-                                              kwargs)
+                                              disallow_reauthentication)
             ret['result'] = True
             ret['comment'] = 'Successfully created the {0} role.'.format(role)
             ret['changes']['new'] = __salt__['vault.get_ec2_role'](role)

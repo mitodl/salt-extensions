@@ -267,9 +267,9 @@ def create(name, allocated_storage, db_instance_class, engine,
             return {'results': bool(conn)}
 
         kwargs = {}
-        excluded = {'region', 'key', 'keyid', 'profile', 'tags'}
+        boto_params = set(boto3_param_map.keys())
         keys = set(locals().keys())
-        for key in keys.difference(excluded):
+        for key in keys.intersection(boto_params):
             val = locals()[key]
             if val is not None:
                 mapped = boto3_param_map[key]
@@ -856,9 +856,10 @@ def modify_db_instance(name,
             return {'modified': False}
 
         kwargs = {}
-        excluded = {'region', 'key', 'keyid', 'profile', 'name'}
+        excluded = {'name'}
+        boto_params = set(boto3_param_map.keys())
         keys = set(locals().keys())
-        for key in keys.difference(excluded):
+        for key in keys.intersection(boto_params).difference(excluded):
             val = locals()[key]
             if val is not None:
                 mapped = boto3_param_map[key]

@@ -193,9 +193,13 @@ def parameter_group_exists(name, tags=None, region=None, key=None, keyid=None,
 
     try:
         rds = conn.describe_db_parameter_groups(DBParameterGroupName=name)
-        return {'exists': bool(rds)}
+        return {'exists': bool(rds), 'error': None}
     except ClientError as e:
-        return {'error': salt.utils.boto3.get_error(e)}
+        resp = {}
+        if e.response['Error']['Code'] == 'DBParameterGroupNotFound':
+            resp['exists'] = False
+        resp['error'] = salt.utils.boto3.get_error(e)
+        return resp
 
 
 def subnet_group_exists(name, tags=None, region=None, key=None, keyid=None,
@@ -717,7 +721,7 @@ def describe_parameter_group(name, Filters=None, MaxRecords=None, Marker=None,
                                                       region=region, key=key,
                                                       keyid=keyid,
                                                       profile=profile)
-    if not res:
+    if not res.get('exists'):
         return {'exists': bool(res)}
 
     try:
@@ -759,7 +763,7 @@ def describe_parameters(name, Source=None, MaxRecords=None, Marker=None,
                                                       region=region, key=key,
                                                       keyid=keyid,
                                                       profile=profile)
-    if not res:
+    if not res.get('exists'):
         return {'exists': bool(res)}
 
     try:

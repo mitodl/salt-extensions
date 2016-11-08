@@ -807,7 +807,7 @@ def modify_db_instance(name,
                        apply_immediately=None,
                        auto_minor_version_upgrade=None,
                        backup_retention_period=None,
-                       ca_certificate_identifier=None
+                       ca_certificate_identifier=None,
                        character_set_name=None,
                        copy_tags_to_snapshot=None,
                        db_cluster_identifier=None,

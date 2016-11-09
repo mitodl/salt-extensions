@@ -122,6 +122,7 @@ boto3_param_map = {
     'vpc_security_group_ids': ('VpcSecurityGroupIds', list),
 }
 
+
 def __virtual__():
     '''
     Only load if boto libraries exist and if boto libraries are greater than
@@ -764,12 +765,14 @@ def describe_parameters(name, Source=None, MaxRecords=None, Marker=None,
                                                       keyid=keyid,
                                                       profile=profile)
     if not res.get('exists'):
-        return {'exists': bool(res)}
+        return {'result': False,
+                'message': 'Parameter group {0} does not exist'.format(name)}
 
     try:
         conn = _get_conn(region=region, key=key, keyid=keyid, profile=profile)
         if not conn:
-            return {'results': bool(conn)}
+            return {'result': False,
+                    'message': 'Could not establish a connection to RDS'}
 
         kwargs = {}
         for key in ('Marker', 'Source'):
@@ -782,25 +785,26 @@ def describe_parameters(name, Source=None, MaxRecords=None, Marker=None,
         r = conn.describe_db_parameters(DBParameterGroupName=name, **kwargs)
 
         if not r:
-            return {'results': bool(r), 'message':
-                    'Failed to get RDS parameters for group {0}.'.format(name)}
+            return {'result': False,
+                    'message': 'Failed to get RDS parameters for group {0}.'
+                    .format(name)}
 
         results = r['Parameters']
         keys = ['ParameterName', 'ParameterValue', 'Description',
                 'Source', 'ApplyType', 'DataType', 'AllowedValues',
                 'IsModifieable', 'MinimumEngineVersion', 'ApplyMethod']
 
-        c = 0
-        p = odict.OrderedDict()
-        while c < len(results):
-            d = odict.OrderedDict()
+        parameters = odict.OrderedDict()
+        ret = {'result':  True}
+        for result in results:
+            data = odict.OrderedDict()
             for k in keys:
-                d[k] = results[c].get(k)
+                data[k] = result.get(k)
 
-            p[results[c].get('ParameterName')] = d
-            c += 1
+            parameters[result.get('ParameterName')] = data
 
-        return p
+        ret['parameters'] = parameters
+        return ret
     except ClientError as e:
         return {'error': salt.utils.boto3.get_error(e)}
 
@@ -860,7 +864,7 @@ def modify_db_instance(name,
             return {'modified': False}
 
         kwargs = {}
-        excluded = {'name'}
+        excluded = set(('name',))
         boto_params = set(boto3_param_map.keys())
         keys = set(locals().keys())
         for key in keys.intersection(boto_params).difference(excluded):

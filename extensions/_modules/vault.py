@@ -7,6 +7,7 @@ from __future__ import absolute_import
 
 import logging
 import inspect
+import time
 from functools import wraps
 
 log = logging.getLogger(__name__)
@@ -89,6 +90,24 @@ def _rekey(secret_shares, secret_threshold, sealing_keys, pgp_keys, root_token):
     client.rekey_multi(sealing_keys, nonce=rekey['nonce'])
 
 
+def _wait_after_init(client, retries=5):
+    '''This function will allow for a configurable delay before attempting
+    to issue requests after an initialization. This is necessary because when
+    running on an HA backend there is a short period where the Vault instance
+    will be on standby while it acquires the lock.'''
+    ready = False
+    while retries > 0 and not ready:
+        try:
+            status = client.read('sys/health')
+            ready = (status.get('initialized') and not status.get('sealed')
+                     and not status.get('standby'))
+        except hvac.exceptions.VaultError:
+            pass
+        if ready:
+            break
+        retries -= 1
+        time.sleep(1)
+
 def initialize(secret_shares=5, secret_threshold=3, pgp_keys=None,
                keybase_users=None, unseal=True):
     success = True
@@ -113,6 +132,7 @@ def initialize(secret_shares=5, secret_threshold=3, pgp_keys=None,
         sealing_keys = secrets['keys']
         root_token = secrets['root_token']
         if unseal:
+            _wait_after_init(client)
             log.debug('Unsealing Vault with generated sealing keys.')
             _unseal(sealing_keys)
     except hvac.exceptions.VaultError as e:
@@ -121,6 +141,7 @@ def initialize(secret_shares=5, secret_threshold=3, pgp_keys=None,
         sealing_keys = None
     try:
         if pgp_keys and unseal:
+            _wait_after_init(client)
             log.debug('Regenerating PGP encrypted keys and backing them up.')
             log.debug('PGP keys: {}'.format(pgp_keys))
             client.token = root_token

@@ -155,7 +155,7 @@ def event_return(events):
     '''
     index = __salt__['config.option'](
         'elasticsearch:master_event_index',
-        'salt-master-event-cache')
+        'salt-master-event-cache').replace('.', '_')
     doc_type = __salt__['config.option'](
         'elasticsearch:master_event_doc_type',
         'default'

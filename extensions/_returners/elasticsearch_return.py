@@ -160,6 +160,8 @@ def event_return(events):
         'elasticsearch:master_event_doc_type',
         'default'
     )
+    log.debug('Saving event to index: {0} with doc_type: {1}'.format(
+        index, doc_type))
 
     if __salt__['config.option']('elasticsearch:index_date', False):
         index = '{0}-{1}'.format(index,
@@ -167,16 +169,19 @@ def event_return(events):
 
     _ensure_index(index)
 
+    retvals = []
     for event in events:
-        data = {
-            'tag': event.get('tag', ''),
-            'data': event.get('data', '')
-        }
+        log.trace('Attempting to save event: {}'.format(event))
+        data = {'tag': event.get('tag', '')}
+        for key, val in event.get('data', {}):
+            data[key.replace('.', '_')] = val
+        retval = __salt__['elasticsearch.document_create'](index=index,
+                                                           doc_type=doc_type,
+                                                           id=uuid.uuid4(),
+                                                           body=json.dumps(data))
+        retvals.append(retval)
 
-    ret = __salt__['elasticsearch.document_create'](index=index,
-                                                    doc_type=doc_type,
-                                                    id=uuid.uuid4(),
-                                                    body=json.dumps(data))
+    ret = retvals
 
 
 def prep_jid(nocache=False, passed_jid=None):  # pylint: disable=unused-argument

@@ -62,7 +62,7 @@ def auth_backend_enabled(name, backend_type, description='', mount_point=None):
            'result': '',
            'changes': {'old': backends}}
 
-    for path, settings in __salt__['vault.list_auth_backends']().items():
+    for path, settings in __salt__['vault.list_auth_backends']()['data'].items():
         if (path.strip('/') == mount_point or backend_type and
             settings['type'] == backend_type):
             backend_enabled = True
@@ -95,7 +95,7 @@ def audit_backend_enabled(name, backend_type, description='', options=None,
                           backend_name=None):
     if not backend_name:
         backend_name = backend_type
-    backends = __salt__['vault.list_audit_backends']()
+    backends = __salt__['vault.list_audit_backends']()['data']
     setting_dict = {'type': backend_type, 'description': description}
     backend_enabled = False
     ret = {'name': name,
@@ -104,14 +104,13 @@ def audit_backend_enabled(name, backend_type, description='', options=None,
            'changes': {'old': backends}}
 
     for path, settings in __salt__['vault.list_audit_backends']().items():
-        if (path.strip('/') == mount_point or backend_type and
+        if (path.strip('/') == backend_type and
             settings['type'] == backend_type):
             backend_enabled = True
 
     if backend_enabled:
-        ret['comment'] = ('The {audit_type} backend mounted at {mount} is already'
-                          ' enabled.'.format(audit_type=backend_type,
-                                             mount=mount_point))
+        ret['comment'] = ('The {audit_type} backend is already enabled.'
+                          .format(audit_type=backend_type))
         ret['result'] = True
     elif __opts__['test']:
         ret['result'] = None
@@ -235,7 +234,7 @@ def ec2_role_created(name, role, bound_ami_id, role_tag=None, max_ttl=None,
     else:
         try:
             __salt__['vault.create_ec2_role'](role, bound_ami_id, role_tag,
-                                              max_ttl, policies,
+                                              max_ttl, ','.join(policies),
                                               allow_instance_migration,
                                               disallow_reauthentication)
             ret['result'] = True

@@ -208,8 +208,10 @@ def policy_created(name, rules):
     return ret
 
 
-def ec2_role_created(name, role, bound_ami_id, role_tag=None, max_ttl=None,
-                     policies=None, allow_instance_migration=False,
+def ec2_role_created(name, role, bound_ami_id=None, bound_iam_role_arn=None,
+                     bound_account_id=None, bound_iam_instance_profile_arn=None,
+                     role_tag=None, ttl=None, max_ttl=None, policies=None,
+                     allow_instance_migration=False,
                      disallow_reauthentication=False):
     try:
         current_role = __salt__['vault.get_ec2_role'](role)
@@ -233,10 +235,16 @@ def ec2_role_created(name, role, bound_ami_id, role_tag=None, max_ttl=None,
             ret['comment'] = ('The {0} role will be created')
     else:
         try:
-            __salt__['vault.create_ec2_role'](role, bound_ami_id, role_tag,
-                                              max_ttl, ','.join(policies),
-                                              allow_instance_migration,
-                                              disallow_reauthentication)
+            __salt__['vault.create_vault_ec2_client_configuration']()
+            __salt__['vault.create_ec2_role'](role, bound_ami_id,
+                                              role_tag=role_tag,
+                                              bound_iam_role_arn=bound_iam_role_arn,
+                                              bound_account_id=bound_account_id,
+                                              bound_iam_instance_profile_arn=bound_iam_instance_profile_arn,
+                                              ttl=ttl, max_ttl=max_ttl,
+                                              policies=','.join(policies),
+                                              allow_instance_migration=allow_instance_migration,
+                                              disallow_reauthentication=disallow_reauthentication)
             ret['result'] = True
             ret['comment'] = 'Successfully created the {0} role.'.format(role)
             ret['changes']['new'] = __salt__['vault.get_ec2_role'](role)

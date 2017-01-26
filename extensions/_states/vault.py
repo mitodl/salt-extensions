@@ -1,7 +1,10 @@
 from __future__ import absolute_import
 
 import logging
+import os
 
+import salt.config
+import salt.syspaths
 import salt.utils
 
 log = logging.getLogger(__name__)
@@ -253,4 +256,73 @@ def ec2_role_created(name, role, bound_ami_id=None, bound_iam_role_arn=None,
             log.exception(e)
             ret['result'] = False
             ret['comment'] = 'Failed to create the {0} role.'.format(role)
+    return ret
+
+
+def ec2_minion_authenticated(name, role, pkcs7=None, nonce=None):
+    """Authenticate a minion using EC2 auth and write the client token to the
+    configuration file to be used for subsequent calls to vault.
+
+    :param name: String, unused
+    :param role: The role that the minion is to be authenticated against
+    :param pkcs7: The pkcs7 key for the minion, will be fetched from EC2
+                  metadata if not passed to the function.
+    :param nonce: An arbitrary string to be used for future authentication attempts.
+                  Will be generated automatically by Vault if not provided.
+    :returns: client token and lease information
+    :rtype: dict
+
+    """
+    # Make sure that the target role exists before trying to use it to auth
+    try:
+        __salt__['vault.get_ec2_role'](role)
+    except (hvac.exceptions.InvalidRequest, hvac.exceptions.InvalidPath):
+        log.error('Specified EC2 role has not been created.')
+        raise
+    ret = {
+        'name': name,
+        'comment': '',
+        'result': False,
+        'changes': {}
+    }
+    try:
+        is_authenticated = __salt__['vault.is_authenticated']()
+    except (hvac.exceptions.InvalidRequest, hvac.exceptions.InvalidPath) as e:
+        log.exception(e)
+        raise
+    if not is_authenticated:
+        ret['comment'] = ('The minion will be authenticated to Vault using '
+                          'the EC2 authentication backend.')
+    else:
+        ret['comment'] = ('The minion is already authenticated. No '
+                          'action will be performed.')
+    if __opts__['test']:
+        ret['result'] = None
+    else:
+        try:
+            if not pkcs7:
+                pkcs7 = ''.join(
+                    __salt__['http.query'](
+                        'http://169.254.169.254/latest/dynamic/instance-identity/pkcs7'
+                    ).get('body', '').splitlines())
+            auth_result = __salt__['vault.auth_ec2'](pkcs7=pkcs7, role=role)
+            minion_config = {
+                'vault.token': auth_result['auth']['client_token'],
+                'vault.nonce': auth_result['auth']['metadata']['nonce']
+            }
+            conf_include_dir = os.path.abspath(os.path.join(
+                salt.syspaths.CONFIG_DIR, __opts__['default_include']))
+            vault_conf_file = os.path.join(conf_include_dir, '99_vault_client.conf')
+            with open(vault_conf_file, 'w') as vault_conf:
+                for k, v in minion_config.items():
+                    vault_conf.write('{key}: {value}\n'.format(key=k, value=v))
+            salt.config.apply_minion_config(overrides=minion_config)
+            ret['changes']['new'] = auth_result
+            ret['changes']['old'] = {}
+            ret['comment'] = 'Successfully authenticated using EC2 backend'
+            ret['result'] = True
+        except (hvac.exceptions.InvalidRequest, hvac.exceptions.InvalidPath) as e:
+            log.exception(e)
+            ret['result'] = False
+            ret['comment'] = 'Failed to authenticate'
     return ret

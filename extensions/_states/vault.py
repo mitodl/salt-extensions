@@ -259,7 +259,8 @@ def ec2_role_created(name, role, bound_ami_id=None, bound_iam_role_arn=None,
     return ret
 
 
-def ec2_minion_authenticated(name, role, pkcs7=None, nonce=None):
+def ec2_minion_authenticated(name, role, pkcs7=None, nonce=None,
+                             client_conf_file=None):
     """Authenticate a minion using EC2 auth and write the client token to the
     configuration file to be used for subsequent calls to vault.
 
@@ -269,6 +270,8 @@ def ec2_minion_authenticated(name, role, pkcs7=None, nonce=None):
                   metadata if not passed to the function.
     :param nonce: An arbitrary string to be used for future authentication attempts.
                   Will be generated automatically by Vault if not provided.
+    :param client_conf_file: File path for where the client token and nonce
+                             will be written to
     :returns: client token and lease information
     :rtype: dict
 
@@ -310,9 +313,12 @@ def ec2_minion_authenticated(name, role, pkcs7=None, nonce=None):
                 'vault.token': auth_result['auth']['client_token'],
                 'vault.nonce': auth_result['auth']['metadata']['nonce']
             }
-            conf_include_dir = os.path.abspath(os.path.join(
-                salt.syspaths.CONFIG_DIR, __opts__['default_include']))
-            vault_conf_file = os.path.join(conf_include_dir, '99_vault_client.conf')
+            if not client_conf_file:
+                conf_include_dir = os.path.dirname(os.path.join(
+                    salt.syspaths.CONFIG_DIR, __opts__['default_include']))
+                vault_conf_file = os.path.join(conf_include_dir, '99_vault_client.conf')
+            else:
+                vault_conf_file = client_conf_file
             with open(vault_conf_file, 'w') as vault_conf:
                 for k, v in minion_config.items():
                     vault_conf.write('{key}: {value}\n'.format(key=k, value=v))

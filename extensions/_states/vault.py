@@ -260,7 +260,7 @@ def ec2_role_created(name, role, bound_ami_id=None, bound_iam_role_arn=None,
 
 
 def ec2_minion_authenticated(name, role, pkcs7=None, nonce=None,
-                             client_conf_file=None):
+                             is_master=False, client_conf_files=None):
     """Authenticate a minion using EC2 auth and write the client token to the
     configuration file to be used for subsequent calls to vault.
 
@@ -270,8 +270,10 @@ def ec2_minion_authenticated(name, role, pkcs7=None, nonce=None,
                   metadata if not passed to the function.
     :param nonce: An arbitrary string to be used for future authentication attempts.
                   Will be generated automatically by Vault if not provided.
-    :param client_conf_file: File path for where the client token and nonce
-                             will be written to
+    :param is_master: Boolean value to determine whether the configuration file
+                      needs to be written out for the master as well.
+    :param client_conf_file: One or more file paths for where the client token
+                             and nonce will be written to.
     :returns: client token and lease information
     :rtype: dict
 
@@ -309,20 +311,27 @@ def ec2_minion_authenticated(name, role, pkcs7=None, nonce=None,
                         'http://169.254.169.254/latest/dynamic/instance-identity/pkcs7'
                     ).get('body', '').splitlines())
             auth_result = __salt__['vault.auth_ec2'](pkcs7=pkcs7, role=role)
-            minion_config = {
+            client_config = {
                 'vault.token': auth_result['auth']['client_token'],
                 'vault.nonce': auth_result['auth']['metadata']['nonce']
             }
-            if not client_conf_file:
-                conf_include_dir = os.path.dirname(os.path.join(
-                    salt.syspaths.CONFIG_DIR, __opts__['default_include']))
-                vault_conf_file = os.path.join(conf_include_dir, '99_vault_client.conf')
+            vault_conf_files = []
+            if not client_conf_files:
+                vault_conf_files.append(os.path.join(
+                    salt.config.apply_minion_config()['default_include'],
+                    '99_vault_client.conf'))
+                if is_master:
+                    vault_conf_files.append(os.path.join(
+                        salt.config.apply_master_config()['default_include'],
+                        '99_vault_client.conf'))
             else:
-                vault_conf_file = client_conf_file
-            with open(vault_conf_file, 'w') as vault_conf:
-                for k, v in minion_config.items():
-                    vault_conf.write('{key}: {value}\n'.format(key=k, value=v))
-            salt.config.apply_minion_config(overrides=minion_config)
+                if not isinstance(client_conf_files, list):
+                    client_conf_files = [client_conf_files]
+                vault_conf_files.extend(client_conf_files)
+            for fpath in vault_conf_files:
+                with open(fpath, 'w') as vault_conf:
+                    for k, v in client_config.items():
+                        vault_conf.write('{key}: {value}\n'.format(key=k, value=v))
             ret['changes']['new'] = auth_result
             ret['changes']['old'] = {}
             ret['comment'] = 'Successfully authenticated using EC2 backend'

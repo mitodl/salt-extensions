@@ -65,7 +65,7 @@ def auth_backend_enabled(name, backend_type, description='', mount_point=None):
            'result': '',
            'changes': {'old': backends}}
 
-    for path, settings in __salt__['vault.list_auth_backends']()['data'].items():
+    for path, settings in __salt__['vault.list_auth_backends']().get('data', {}).items():
         if (path.strip('/') == mount_point or backend_type and
             settings['type'] == backend_type):
             backend_enabled = True
@@ -98,7 +98,7 @@ def audit_backend_enabled(name, backend_type, description='', options=None,
                           backend_name=None):
     if not backend_name:
         backend_name = backend_type
-    backends = __salt__['vault.list_audit_backends']()['data']
+    backends = __salt__['vault.list_audit_backends']().get('data', {})
     setting_dict = {'type': backend_type, 'description': description}
     backend_enabled = False
     ret = {'name': name,
@@ -131,6 +131,45 @@ def audit_backend_enabled(name, backend_type, description='', options=None,
         except hvac.exceptions.VaultError as e:
             ret['result'] = False
             log.exception(e)
+    return ret
+
+
+def secret_backend_enabled(name, backend_type, description='',
+                           mount_point=None, config=None):
+    backends = __salt__['vault.list_secret_backends']().get('data', {})
+    setting_dict = {'type': backend_type, 'description': description}
+    backend_enabled = False
+    ret = {'name': name,
+           'comment': '',
+           'result': '',
+           'changes': {'old': backends}}
+
+    for path, settings in __salt__['vault.list_secret_backends']().get('data', {}).items():
+        if (path.strip('/') == mount_point or backend_type and
+            settings['type'] == backend_type):
+            backend_enabled = True
+
+    if backend_enabled:
+        ret['comment'] = ('The {secret_type} backend mounted at {mount} is already'
+                          ' enabled.'.format(secret_type=backend_type,
+                                             mount=mount_point))
+        ret['result'] = True
+    elif __opts__['test']:
+        ret['result'] = None
+    else:
+        try:
+            __salt__['vault.enable_secret_backend'](backend_type,
+                                                  description=description,
+                                                  mount_point=mount_point)
+            ret['result'] = True
+            ret['changes']['new'] = __salt__[
+                'vault.list_secret_backends']()
+        except hvac.exceptions.VaultError as e:
+            ret['result'] = False
+            log.exception(e)
+        ret['comment'] = ('The {backend} has been successfully mounted at '
+                          '{mount}.'.format(backend=backend_type,
+                                            mount=mount_point))
     return ret
 
 

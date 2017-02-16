@@ -145,7 +145,7 @@ def secret_backend_enabled(name, backend_type, description='',
            'changes': {'old': backends}}
 
     for path, settings in __salt__['vault.list_secret_backends']().get('data', {}).items():
-        if (path.strip('/') == mount_point or backend_type and
+        if (path.strip('/') == mount_point and
             settings['type'] == backend_type):
             backend_enabled = True
 

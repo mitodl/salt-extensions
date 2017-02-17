@@ -6,6 +6,7 @@ import os
 import salt.config
 import salt.syspaths
 import salt.utils
+import salt.exceptions
 
 log = logging.getLogger(__name__)
 
@@ -134,10 +135,10 @@ def audit_backend_enabled(name, backend_type, description='', options=None,
     return ret
 
 
-def secret_backend_enabled(name, backend_type, description='',
-                           mount_point=None, config=None):
+def secret_backend_enabled(name, backend_type, description='', mount_point=None,
+                           connection_config_path=None, connection_config=None,
+                           lease_max=None, lease_default=None):
     backends = __salt__['vault.list_secret_backends']().get('data', {})
-    setting_dict = {'type': backend_type, 'description': description}
     backend_enabled = False
     ret = {'name': name,
            'comment': '',
@@ -168,14 +169,43 @@ def secret_backend_enabled(name, backend_type, description='',
         except hvac.exceptions.VaultError as e:
             ret['result'] = False
             log.exception(e)
+        if connection_config:
+            if not connection_config_path:
+                connection_config_path = '{mount}/config/connection'.format(
+                    mount=mount_point)
+            try:
+                __salt__['vault.write'](connection_config_path,
+                                        **connection_config)
+            except hvac.exceptions.VaultError as e:
+                ret['comment'] = ('The backend was enabled but the connection '
+                                  'could not be configured')
+                log.exception(e)
+                raise salt.exceptions.CommandExecutionError(str(e))
+        if lease_max or lease_default:
+            lease_config_path = '{mount}/config/lease'.format(
+                mount=mount_point)
+            if lease > lease_max:
+                raise salt.exceptions.SaltInvocationError(
+                    'The specified lease is longer than the maximum')
+            if lease_max and not lease:
+                lease = lease_max
+            if lease and not lease_max:
+                lease_max = lease
+            try:
+                __salt__['vault.write'](lease_config_path, lease=lease,
+                                        lease_max=lease_max)
+            except hvac.exceptions.VaultError as e:
+                ret['comment'] = ('The backend was enabled but the connection '
+                                  'could not be configured'.format(e))
+                log.exception(e)
+                raise salt.exceptions.CommandExecutionError(str(e))
         ret['comment'] = ('The {backend} has been successfully mounted at '
                           '{mount}.'.format(backend=backend_type,
                                             mount=mount_point))
     return ret
 
-
-def app_id_created(name, app_id, policies, display_name=None, mount_point='app-id',
-                   **kwargs):
+def app_id_created(name, app_id, policies, display_name=None,
+                   mount_point='app-id', **kwargs):
     ret = {'name': app_id,
            'comment': '',
            'result': False,

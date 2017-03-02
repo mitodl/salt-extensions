@@ -26,6 +26,22 @@ def __virtual__():
 
 def initialized(name, secret_shares=5, secret_threshold=3, pgp_keys=None,
                keybase_users=None, unseal=True):
+    """
+    Ensure that the vault instance has been initialized and run the
+    initialization if it has not.
+
+    :param name: The id used for the state definition
+    :param secret_shares: THe number of secret shares to use for the
+                          initialization key
+    :param secret_threshold: The number of keys required to unseal the vault
+    :param pgp_keys: List of PGP public key strings to use for encrypting
+                     the sealing keys
+    :param keybase_users: List of Keybase users to retrieve public PGP keys
+                          for to use in encrypting the sealing keys
+    :param unseal: Whether to unseal the vault during initialization
+    :returns: Result of the execution
+    :rtype: dict
+    """
     ret = {'name': name,
            'comment': '',
            'result': '',
@@ -58,6 +74,16 @@ def initialized(name, secret_shares=5, secret_threshold=3, pgp_keys=None,
 
 
 def auth_backend_enabled(name, backend_type, description='', mount_point=None):
+    """
+    Ensure that the named backend has been enabled
+
+    :param name: ID for state definition
+    :param backend_type: The type of authentication backend to enable
+    :param description: The description to set for the backend
+    :param mount_point: The root path at which the backend will be mounted
+    :returns: The result of the state execution
+    :rtype: dict
+    """
     backends = __salt__['vault.list_auth_backends']()
     setting_dict = {'type': backend_type, 'description': description}
     backend_enabled = False
@@ -138,6 +164,27 @@ def audit_backend_enabled(name, backend_type, description='', options=None,
 def secret_backend_enabled(name, backend_type, description='', mount_point=None,
                            connection_config_path=None, connection_config=None,
                            lease_max=None, lease_default=None):
+    """
+    Ensure that the specified secret backend has been enabled and, if specified
+    configure the connection to the backend.
+
+    :param name: The ID for the state definition
+    :param backend_type: The type of the backend to be enabled (e.g. MySQL)
+    :param description: The description to set for the enabled backend
+    :param mount_point: The root path for the backend
+    :param connection_config_path: The full path to the endpoint used for
+                                   configuring the connection (needed for
+                                   e.g. Consul)
+    :param connection_config: The configuration settings for the backend
+                              connection
+    :param lease_max: The maximum allowed lease for credentials retrieved from
+                      the backend
+    :param lease_default: The default allowed lease for credentials retrieved from
+                          the backend
+    :returns: The result of the execution
+    :rtype: dict
+
+    """
     backends = __salt__['vault.list_secret_backends']().get('data', {})
     backend_enabled = False
     ret = {'name': name,
@@ -248,7 +295,15 @@ def app_id_created(name, app_id, policies, display_name=None,
     return ret
 
 
-def policy_created(name, rules):
+def policy_present(name, rules):
+    """
+    Ensure that the named policy exists and has the defined rules set
+
+    :param name: The name of the policy
+    :param rules: The rules to set on the policy
+    :returns: The result of the state execution
+    :rtype: dict
+    """
     current_policy = __salt__['vault.get_policy'](name, parse=True)
     ret = {'name': name,
            'comment': '',
@@ -280,12 +335,152 @@ def policy_created(name, rules):
                               'created/updated'.format(policy_name=name))
     return ret
 
+def policy_absent(name):
+    """
+    Ensure that the named policy is not present
+
+    :param name: The name of the policy to be deleted
+    :returns: The result of the state execution
+    :rtype: dict
+    """
+    current_policy = __salt__['vault.get_policy'](name, parse=True)
+    ret = {'name': name,
+           'comment': '',
+           'result': False,
+           'changes': {}}
+    if not current_policy:
+        ret['result'] = True
+        ret['comment'] = ('The {policy_name} policy is not present.'.format(
+            policy_name=name))
+    elif __opts__['test']:
+        ret['result'] = None
+        if current_policy:
+            ret['changes']['old'] = current_policy
+            ret['changes']['new'] = {}
+        ret['comment'] = ('The {policy_name} policy {suffix}.'.format(
+            policy_name=name,
+            suffix='will be deleted' if current_policy else 'is not present'))
+    else:
+        try:
+            __salt__['vault.delete_policy'](name)
+            ret['result'] = True
+            ret['comment'] = ('The {policy_name} policy was successfully '
+                              'deleted.')
+            ret['changes']['old'] = current_policy
+            ret['changes']['new'] = {}
+        except hvac.exceptions.VaultError as e:
+            log.exception(e)
+            ret['comment'] = ('The {policy_name} policy failed to be '
+                              'created/updated'.format(policy_name=name))
+    return ret
+
+
+def role_present(name, mount_point, options):
+    """
+    Ensure that the named role exists. If it does not already exist then it
+    will be created with the specified options.
+
+    :param name: The name of the role
+    :param mount_point: The mount point of the target backend
+    :param options: A dictionary of the configuration options for the role
+    :returns: Result of executing the state
+    :rtype: dict
+    """
+    current_role = __salt__['vault.read']('{mount}/roles/{name}'.format(
+        mount=mount_point, name=name))
+    ret = {'name': name,
+           'comment': '',
+           'result': False,
+           'changes': {}}
+    if current_role:
+        ret['result'] = True
+        ret['comment'] = ('The {role} policy already exists with the '
+                          'given rules.'.format(role=name))
+    elif __opts__['test']:
+        ret['result'] = None
+        if current_role:
+            ret['changes']['old'] = current_role
+            ret['changes']['new'] = None
+        ret['comment'] = ('The {role} policy {suffix}.'.format(
+            role=name,
+            suffix='already exists' if current_policy else 'will be created'))
+    else:
+        try:
+            response = __salt__['vault.write']('{mount}/roles/{role}'.format(
+                mount=mount_point, role=name), **options)
+            ret['result'] = True
+            ret['comment'] = ('The {role} role was successfully '
+                              'created.'.format(role=name))
+            ret['changes']['old'] = current_role
+            ret['changes']['new'] = response
+        except hvac.exceptions.VaultError as e:
+            log.exception(e)
+            ret['comment'] = ('The {role} policy failed to be '
+                              'created'.format(role=name))
+    return ret
+
+
+def role_absent(name, mount_point):
+    """
+    Ensure that the named role does not exist.
+
+    :param name: The name of the role to be deleted if present
+    :param mount_point: The mount point of the target backend
+    :returns: The result of the stae execution
+    :rtype: dict
+    """
+    current_role = __salt__['vault.read']('{mount}/roles/{name}'.format(
+        mount=mount_point, name=name))
+    ret = {'name': name,
+           'comment': '',
+           'result': False,
+           'changes': {}}
+    if current_role:
+        ret['changes']['old'] = current_role
+        ret['changes']['new'] = None
+    else:
+        ret['changes'] = None
+        ret['result'] = True
+    if __opts__['test']:
+        ret['result'] = None
+        return ret
+    try:
+        __salt__['vault.delete']('{mount}/roles/{name}'.format(
+            mount=mount_point, name=name))
+        ret['result'] = True
+    except hvac.exceptions.VaultError as e:
+        log.exception(e)
+        raise salt.exceptions.SaltInvocationError(e)
+    return ret
 
 def ec2_role_created(name, role, bound_ami_id=None, bound_iam_role_arn=None,
                      bound_account_id=None, bound_iam_instance_profile_arn=None,
                      role_tag=None, ttl=None, max_ttl=None, policies=None,
                      allow_instance_migration=False,
                      disallow_reauthentication=False):
+    """
+    Ensure that the specified EC2 role exists so that it can be used for
+    authenticating with the Vault EC2 backend.
+
+    :param name: Contains the id of the state definition
+    :param role: The name of the EC2 role
+    :param bound_ami_id: The AMI ID to bind the role to
+    :param bound_iam_role_arn: The IAM role ARN to bind the Vault EC2 role to
+    :param bound_account_id: The account ID to bind the role to
+    :param bound_iam_instance_profile_arn: The instance profile ARN to bind the
+                                           role to
+    :param role_tag: The EC2 tag to use for specifying role access
+    :param ttl: The ttl of the credentials granted when authenticating with
+                this role
+    :param max_ttl: The ttl of the credentials granted when authenticating with
+                    this role
+    :param policies: The policies to grant on this role
+    :param allow_instance_migration: Whether to allow for instance migration
+    :param disallow_reauthentication: Whether this role should allow
+                                      reauthenticating against Vault
+    :returns: The result of the execution
+    :rtype: dict
+    """
     try:
         current_role = __salt__['vault.get_ec2_role'](role)
     except (hvac.exceptions.InvalidRequest, hvac.exceptions.InvalidPath):

@@ -209,7 +209,7 @@ def secret_backend_enabled(name, backend_type, description='', mount_point=None,
             __salt__['vault.enable_secret_backend'](backend_type,
                                                     description=description,
                                                     mount_point=mount_point,
-                                                    config=config)
+                                                    config=connection_config)
             ret['result'] = True
             ret['changes']['new'] = __salt__[
                 'vault.list_secret_backends']()

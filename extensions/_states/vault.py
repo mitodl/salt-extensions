@@ -578,7 +578,10 @@ def ec2_minion_authenticated(name, role, pkcs7=None, nonce=None,
                     __salt__['http.query'](
                         'http://169.254.169.254/latest/dynamic/instance-identity/pkcs7'
                     ).get('body', '').splitlines())
-            auth_result = __salt__['vault.auth_ec2'](pkcs7=pkcs7, role=role)
+            if not nonce and __salt__['config.get']('vault.nonce'):
+                nonce = __salt__['config.get']('vault.nonce')
+            auth_result = __salt__['vault.auth_ec2'](pkcs7=pkcs7, role=role,
+                                                     nonce=nonce)
             client_config = {
                 'vault.token': auth_result['auth']['client_token'],
                 'vault.nonce': auth_result['auth']['metadata']['nonce']
@@ -586,11 +589,15 @@ def ec2_minion_authenticated(name, role, pkcs7=None, nonce=None,
             vault_conf_files = []
             if not client_conf_files:
                 vault_conf_files.append(os.path.join(
-                    salt.config.apply_minion_config()['default_include'],
+                    salt.syspaths.CONFIG_DIR,
+                    os.path.dirname(__salt__['config.get']('default_include')),
                     '99_vault_client.conf'))
                 if is_master:
                     vault_conf_files.append(os.path.join(
-                        salt.config.apply_master_config()['default_include'],
+                        salt.syspaths.CONFIG_DIR,
+                        os.path.dirname(
+                            salt.config.apply_master_config(
+                                {})['default_include']),
                         '99_vault_client.conf'))
             else:
                 if not isinstance(client_conf_files, list):

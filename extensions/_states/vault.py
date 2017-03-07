@@ -163,7 +163,7 @@ def audit_backend_enabled(name, backend_type, description='', options=None,
 
 def secret_backend_enabled(name, backend_type, description='', mount_point=None,
                            connection_config_path=None, connection_config=None,
-                           lease_max=None, lease_default=None):
+                           lease_max=None, lease_default=None, override=False):
     """
     Ensure that the specified secret backend has been enabled and, if specified
     configure the connection to the backend.
@@ -197,7 +197,7 @@ def secret_backend_enabled(name, backend_type, description='', mount_point=None,
             settings['type'] == backend_type):
             backend_enabled = True
 
-    if backend_enabled:
+    if backend_enabled and not override:
         ret['comment'] = ('The {secret_type} backend mounted at {mount} is already'
                           ' enabled.'.format(secret_type=backend_type,
                                              mount=mount_point))
@@ -224,29 +224,29 @@ def secret_backend_enabled(name, backend_type, description='', mount_point=None,
                 __salt__['vault.write'](connection_config_path,
                                         **connection_config)
             except hvac.exceptions.VaultError as e:
-                ret['comment'] = ('The backend was enabled but the connection '
-                                  'could not be configured')
+                ret['comment'] += ('The backend was enabled but the connection '
+                                  'could not be configured\n')
                 log.exception(e)
                 raise salt.exceptions.CommandExecutionError(str(e))
         if lease_max or lease_default:
             lease_config_path = '{mount}/config/lease'.format(
                 mount=mount_point)
-            if lease > lease_max:
+            if lease_default > lease_max:
                 raise salt.exceptions.SaltInvocationError(
                     'The specified lease is longer than the maximum')
-            if lease_max and not lease:
+            if lease_max and not lease_default:
                 lease = lease_max
-            if lease and not lease_max:
+            if lease_default and not lease_max:
                 lease_max = lease
             try:
                 __salt__['vault.write'](lease_config_path, lease=lease,
                                         lease_max=lease_max)
             except hvac.exceptions.VaultError as e:
-                ret['comment'] = ('The backend was enabled but the connection '
-                                  'could not be configured'.format(e))
+                ret['comment'] += ('The backend was enabled but the connection '
+                                  'could not be configured\n'.format(e))
                 log.exception(e)
                 raise salt.exceptions.CommandExecutionError(str(e))
-        ret['comment'] = ('The {backend} has been successfully mounted at '
+        ret['comment'] += ('The {backend} has been successfully mounted at '
                           '{mount}.'.format(backend=backend_type,
                                             mount=mount_point))
     return ret
@@ -375,7 +375,7 @@ def policy_absent(name):
     return ret
 
 
-def role_present(name, mount_point, options):
+def role_present(name, mount_point, options, override=False):
     """
     Ensure that the named role exists. If it does not already exist then it
     will be created with the specified options.
@@ -383,6 +383,9 @@ def role_present(name, mount_point, options):
     :param name: The name of the role
     :param mount_point: The mount point of the target backend
     :param options: A dictionary of the configuration options for the role
+    :param override: Write the role definition even if there is already one
+                     present. Useful if the existing role doesn't match the
+                     desired state.
     :returns: Result of executing the state
     :rtype: dict
     """
@@ -392,7 +395,7 @@ def role_present(name, mount_point, options):
            'comment': '',
            'result': False,
            'changes': {}}
-    if current_role:
+    if current_role and not override:
         ret['result'] = True
         ret['comment'] = ('The {role} policy already exists with the '
                           'given rules.'.format(role=name))

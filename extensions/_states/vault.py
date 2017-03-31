@@ -397,16 +397,16 @@ def role_present(name, mount_point, options, override=False):
            'changes': {}}
     if current_role and not override:
         ret['result'] = True
-        ret['comment'] = ('The {role} policy already exists with the '
+        ret['comment'] = ('The {role} role already exists with the '
                           'given rules.'.format(role=name))
     elif __opts__['test']:
         ret['result'] = None
         if current_role:
             ret['changes']['old'] = current_role
             ret['changes']['new'] = None
-        ret['comment'] = ('The {role} policy {suffix}.'.format(
+        ret['comment'] = ('The {role} role {suffix}.'.format(
             role=name,
-            suffix='already exists' if current_policy else 'will be created'))
+            suffix='already exists' if current_role else 'will be created'))
     else:
         try:
             response = __salt__['vault.write']('{mount}/roles/{role}'.format(
@@ -418,7 +418,7 @@ def role_present(name, mount_point, options, override=False):
             ret['changes']['new'] = response
         except hvac.exceptions.VaultError as e:
             log.exception(e)
-            ret['comment'] = ('The {role} policy failed to be '
+            ret['comment'] = ('The {role} role failed to be '
                               'created'.format(role=name))
     return ret
 

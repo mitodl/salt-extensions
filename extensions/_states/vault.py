@@ -258,12 +258,12 @@ def secret_backend_enabled(name, backend_type, description='', mount_point=None,
                 raise salt.exceptions.SaltInvocationError(
                     'The specified lease is longer than the maximum')
             if lease_max and not lease_default:
-                lease = lease_max
+                lease_default = lease_max
             if lease_default and not lease_max:
-                lease_max = lease
+                lease_max = lease_default
             try:
                 __salt__['vault.write'](lease_config_path,
-                                        lease=lease,
+                                        lease=lease_default,
                                         lease_max=lease_max)
             except hvac.exceptions.VaultError as e:
                 ret['comment'] += ('The backend was enabled but the lease '

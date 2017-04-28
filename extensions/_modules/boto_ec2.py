@@ -1896,7 +1896,7 @@ def delete_tags(resource_ids, tags, region=None, key=None, keyid=None, profile=N
 
 
 def detach_volume(volume_id, instance_id=None, device=None, force=False,
-                  region=None, key=None, keyid=None, profile=None):
+                  region=None, key=None, keyid=None, profile=None, volume_name=None):
     '''
     Detach an EBS volume from an EC2 instance.
 
@@ -1904,6 +1904,8 @@ def detach_volume(volume_id, instance_id=None, device=None, force=False,
 
     volume_id
         (string) – The ID of the EBS volume to be detached.
+    volume_name
+        (string) - The name of the EBS volume to be detached.
     instance_id
         (string) – The ID of the EC2 instance from which it will be detached.
     device
@@ -1923,13 +1925,30 @@ def detach_volume(volume_id, instance_id=None, device=None, force=False,
     .. code-block:: bash
 
         salt-call boto_ec2.detach_volume vol-12345678 i-87654321
+        salt-call boto_ec2.detach_volume myvolume
 
     '''
     conn = _get_conn(region=region, key=key, keyid=keyid, profile=profile)
+    if volume_id:
     try:
         return conn.detach_volume(volume_id, instance_id, device, force)
     except boto.exception.BotoServerError as e:
         log.error(e)
+        return False
+    elif volume_name:
+        try:
+            volumes = conn.describe_volumes(Filters = [
+                                    {'Name': 'name',
+                                    'Values': [volume_name, ]}])
+            for volume in volumes['Volumes']:
+                volume_id = volume['VolumeId']
+                return conn.detach_volume(volume_id, instance_id, device, force)
+        except boto.exception.BotoServerError as e:
+            log.error(e)
+            return False
+    else:
+        msg = "No volume_id or volume_name provided."
+        raise CommandExecutionError(msg)
         return False
 
 

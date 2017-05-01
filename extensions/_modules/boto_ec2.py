@@ -1773,7 +1773,7 @@ def delete_tags(resource_ids, tags, region=None, key=None, keyid=None, profile=N
         return False
 
 
-def detach_volume(volume_id, instance_id=None, device=None, force=False,
+def detach_volume(volume_id=None, instance_id=None, device=None, force=False,
                   region=None, key=None, keyid=None, profile=None, tags=None):
     '''
     Detach an EBS volume from an EC2 instance.
@@ -1803,6 +1803,7 @@ def detach_volume(volume_id, instance_id=None, device=None, force=False,
     .. code-block:: bash
 
         salt-call boto_ec2.detach_volume vol-12345678 i-87654321
+        salt-call boto_ec2.detach_volume tags='{"name":"myvolume"}'
 
     '''
     conn = _get_conn(region=region, key=key, keyid=keyid, profile=profile)

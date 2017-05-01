@@ -1803,7 +1803,7 @@ def detach_volume(volume_id=None, instance_id=None, device=None, force=False,
     .. code-block:: bash
 
         salt-call boto_ec2.detach_volume vol-12345678 i-87654321
-        salt-call boto_ec2.detach_volume tags='{"name":"myvolume"}'
+        salt-call boto_ec2.detach_volume filters='{"tag:Name":"myvolume"}'
 
     '''
     conn = _get_conn(region=region, key=key, keyid=keyid, profile=profile)
@@ -1815,7 +1815,7 @@ def detach_volume(volume_id=None, instance_id=None, device=None, force=False,
             return False
     elif tags:
         try:
-            volumes = conn.get_all_volumes(Filters = [{'Name': tag_name, 'Values':[tag_value]} for tag_name, tag_value in tags.items()])
+            volumes = conn.get_all_volumes(filters = {'tag:{}'.format(tag_name):'{}'.format(tag_value)})
             for volume in volumes['Volumes']:
                 volume_id = volume['VolumeId']
                 return conn.detach_volume(volume_id, instance_id, device, force)

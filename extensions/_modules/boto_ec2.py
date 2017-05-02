@@ -1774,7 +1774,7 @@ def delete_tags(resource_ids, tags, region=None, key=None, keyid=None, profile=N
 
 
 def detach_volume(volume_id=None, instance_id=None, device=None, force=False,
-                  region=None, key=None, keyid=None, profile=None, filters=None):
+                  region=None, key=None, keyid=None, profile=None, tags=None):
     '''
     Detach an EBS volume from an EC2 instance.
 
@@ -1813,9 +1813,9 @@ def detach_volume(volume_id=None, instance_id=None, device=None, force=False,
         except boto.exception.BotoServerError as e:
             log.error(e)
             return False
-    elif filters:
+    elif tags:
         try:
-            volumes = conn.get_all_volumes(filters = {'tag:{0}'.format(tag_name):'{0}'.format(tag_value)})
+            volumes = conn.get_all_volumes(filters = {'tag:{0}'.format(tag_name):'{0}'.format(tag_value) for tag_name, tag_value in tags.items()})
             for volume in volumes['Volumes']:
                 volume_id = volume['VolumeId']
                 return conn.detach_volume(volume_id, instance_id, device, force)

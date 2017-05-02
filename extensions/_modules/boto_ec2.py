@@ -51,6 +51,7 @@ import logging
 import time
 import json
 from distutils.version import LooseVersion as _LooseVersion  # pylint: disable=import-error,no-name-in-module
+import re
 
 # Import Salt libs
 import salt.utils
@@ -1803,7 +1804,7 @@ def detach_volume(volume_id=None, instance_id=None, device=None, force=False,
     .. code-block:: bash
 
         salt-call boto_ec2.detach_volume vol-12345678 i-87654321
-        salt-call boto_ec2.detach_volume filters='{"tag:Name":"myvolume"}'
+        salt-call boto_ec2.detach_volume tags='{"Name":"myvolume"}'
 
     '''
     conn = _get_conn(region=region, key=key, keyid=keyid, profile=profile)
@@ -1816,9 +1817,9 @@ def detach_volume(volume_id=None, instance_id=None, device=None, force=False,
     elif tags:
         try:
             volumes = conn.get_all_volumes(filters = {'tag:{0}'.format(tag_name):'{0}'.format(tag_value) for tag_name, tag_value in tags.items()})
-            for volume in volumes['Volumes']:
-                volume_id = volume['VolumeId']
-                return conn.detach_volume(volume_id, instance_id, device, force)
+            for volume_id in volumes:
+                if re.match('vol-', volume_id):
+                    return conn.detach_volume(volume_id, instance_id, device, force)
         except boto.exception.BotoServerError as e:
             log.error(e)
             return False

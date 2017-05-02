@@ -51,7 +51,6 @@ import logging
 import time
 import json
 from distutils.version import LooseVersion as _LooseVersion  # pylint: disable=import-error,no-name-in-module
-import re
 
 # Import Salt libs
 import salt.utils

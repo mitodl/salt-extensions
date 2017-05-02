@@ -1819,7 +1819,7 @@ def detach_volume(volume_id=None, instance_id=None, device=None, force=False,
             volumes = conn.get_all_volumes(filters = {'tag:{0}'.format(tag_name):'{0}'.format(tag_value) for tag_name, tag_value in tags.items()})
             print volumes
             for volume_id in volumes:
-                print volume_id
+                print volume_id.id
                 print type(volume_id)
                 if volume_id.startswith('vol-'):
                     return conn.detach_volume(volume_id, instance_id, device, force)

@@ -284,8 +284,8 @@ def _register_functions():
     functions, and then register them in the module namespace so that they
     can be called via salt.
     """
-    for module_ in modules.__all__:
-        mod_name = _to_snake_case(module_)
+    for module_ in modules.modules:
+        mod_name = module_
         mod_func = _copy_function(mod_name, str(mod_name))
         mod_func.__doc__ = _build_doc(module_)
         __all__.append(mod_name)

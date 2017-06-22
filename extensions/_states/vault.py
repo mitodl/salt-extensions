@@ -243,6 +243,9 @@ def secret_backend_enabled(name, backend_type, description='', mount_point=None,
             if ttl_default and not ttl_max:
                 ttl_max = ttl_default
             try:
+                log.debug('Tuning the mount ttl to be: Max={ttl_max}, '
+                          'Default={ttl_default}'.format(
+                              ttl_max=ttl_max, ttl_default=ttl_default))
                 __salt__['vault.write'](ttl_config_path,
                                         default_lease_ttl=ttl_default,
                                         max_lease_ttl=ttl_max)
@@ -262,6 +265,9 @@ def secret_backend_enabled(name, backend_type, description='', mount_point=None,
             if lease_default and not lease_max:
                 lease_max = lease_default
             try:
+                log.debug('Tuning the lease config to be: Max={lease_max}, '
+                          'Default={lease_default}'.format(
+                              lease_max=lease_max, lease_default=lease_default))
                 __salt__['vault.write'](lease_config_path,
                                         lease=lease_default,
                                         lease_max=lease_max)

@@ -237,14 +237,14 @@ def secret_backend_enabled(name, backend_type, description='', mount_point=None,
                 mount=mount_point)
             if ttl_default > ttl_max:
                 raise salt.exceptions.SaltInvocationError(
-                    'The specified ttl is longer than the maximum')
+                    'The specified default ttl is longer than the maximum')
             if ttl_max and not ttl_default:
-                ttl = ttl_max
-            if lease_default and not lease_max:
-                ttl_max = ttl
+                ttl_default = ttl_max
+            if ttl_default and not ttl_max:
+                ttl_max = ttl_default
             try:
                 __salt__['vault.write'](ttl_config_path,
-                                        default_lease_ttl=ttl,
+                                        default_lease_ttl=ttl_default,
                                         max_lease_ttl=ttl_max)
             except hvac.exceptions.VaultError as e:
                 ret['comment'] += ('The backend was enabled but the connection '
@@ -256,7 +256,7 @@ def secret_backend_enabled(name, backend_type, description='', mount_point=None,
                 mount=mount_point)
             if lease_default > lease_max:
                 raise salt.exceptions.SaltInvocationError(
-                    'The specified lease is longer than the maximum')
+                    'The specified default lease is longer than the maximum')
             if lease_max and not lease_default:
                 lease_default = lease_max
             if lease_default and not lease_max:

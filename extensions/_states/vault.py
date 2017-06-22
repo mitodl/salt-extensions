@@ -269,8 +269,8 @@ def secret_backend_enabled(name, backend_type, description='', mount_point=None,
                           'Default={lease_default}'.format(
                               lease_max=lease_max, lease_default=lease_default))
                 __salt__['vault.write'](lease_config_path,
-                                        lease=lease_default,
-                                        lease_max=lease_max)
+                                        ttl=lease_default,
+                                        max_ttl=lease_max)
             except hvac.exceptions.VaultError as e:
                 ret['comment'] += ('The backend was enabled but the lease '
                                   'length could not be configured\n'.format(e))

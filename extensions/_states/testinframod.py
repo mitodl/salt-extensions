@@ -52,7 +52,7 @@ def _to_snake_case(pascal_case):
 
 
 def _generate_functions():
-    for module in modules.__all__:
+    for module_ in modules.modules:
         module_name = _to_snake_case(module)
         func_name = 'testinfra.{0}'.format(module_name)
         __all__.append(module_name)

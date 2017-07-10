@@ -58,9 +58,16 @@ def _build_client(url='https://localhost:8200', token=None, cert=None,
 def _bind_client(unbound_function):
     @wraps(unbound_function)
     def bound_function(*args, **kwargs):
-        kwargs = {k: v for k, v in kwargs.items() if not k.startswith('_')}
+        filtered_kwargs = {k: v for k, v in kwargs.items() if not k.startswith('_')}
+        ignore_invalid = filtered_kwargs.pop('ignore_invalid', None)
         client = _build_client()
-        return unbound_function(client, *args, **kwargs)
+        try:
+            return unbound_function(client, *args, **filtered_kwargs)
+        except hvac.exceptions.InvalidRequest:
+            if ignore_invalid:
+                return None
+            else:
+                raise
     return bound_function
 
 

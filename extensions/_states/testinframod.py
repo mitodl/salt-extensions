@@ -53,7 +53,7 @@ def _to_snake_case(pascal_case):
 
 def _generate_functions():
     for module_ in modules.modules:
-        module_name = _to_snake_case(module)
+        module_name = module_
         func_name = 'testinfra.{0}'.format(module_name)
         __all__.append(module_name)
         log.debug('Generating state for module %s as function %s',

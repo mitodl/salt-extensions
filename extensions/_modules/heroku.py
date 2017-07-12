@@ -4,8 +4,8 @@ Module for managing heroku apps.
 
 .. versionadded:: 2015.5.0
 
-:configuration: This module can be used by either passing an api key and version
-    directly or by specifying both in a configuration profile in the salt
+:configuration: This module can be used by either passing an api key directly
+    or by specifying it in a configuration profile in the salt
     master/minion config.
 
     It is possible to use a different API than http://api.heroku.com,
@@ -66,15 +66,15 @@ def _query(api_key=None, endpoint=None, arguments=None, method='GET', data=None)
             if not api_key:
                 api_key = options.get('api_key')
             if not endpoint:
-                endpoint = options.get('endpoint')
+                endpoint = options['endpoint']
         except (NameError, KeyError, AttributeError):
             log.error("No Heroku api key or endpoint found.")
             return False
 
     api_url = 'https://api.heroku.com'  # default API URL
-    url = _urljoin(api_url, endpoint + '/')
+    url = _urljoin(api_url, endpoint)
     if arguments:
-        url = _urljoin(url, arguments + '/')
+        url = _urljoin(url, arguments)
 
     if endpoint:
         headers['Authorization'] = 'Bearer {0}'.format(api_key)
@@ -84,9 +84,9 @@ def _query(api_key=None, endpoint=None, arguments=None, method='GET', data=None)
 
         if method in ['POST', 'PATCH']:
           headers['Content-Type'] = 'application/json'
-      else:
-        log.error('Heroku endpoint not specified')
-        return False
+    else:
+      log.error('Heroku endpoint not specified')
+      return False
 
     result = salt.utils.http.query(
         url,
@@ -203,7 +203,7 @@ def list_app_config_vars(app_name, api_key = None):
     log.debug('result {0}'.format(result))
     return result
 
-def update_app_config_vars(app_name, data, api_key = None):
+def update_app_config_vars(app_name, vars, api_key = None):
     '''
     Update or set config vars. This uses the following heroku call:
     https://devcenter.heroku.com/articles/platform-api-reference#config-vars-update
@@ -219,7 +219,7 @@ def update_app_config_vars(app_name, data, api_key = None):
                arguments=app_name+'/config-vars',
                api_key=api_key,
                method='PATCH',
-               data=data)
+               data=vars)
 
     if result:
       return True

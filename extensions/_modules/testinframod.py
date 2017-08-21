@@ -7,6 +7,7 @@ module dynamically generates wrappers for the various resources by iterating
 over the values in the ``__all__`` variable exposed by the testinfra.modules
 namespace.
 """
+from __future__ import absolute_import
 import inspect
 import logging
 import operator
@@ -234,15 +235,17 @@ def _copy_function(module_name, name=None):
             return success, pass_msgs, fail_msgs
         if hasattr(inspect, 'signature'):
             mod_sig = inspect.signature(mod)
-            parameters = mod_sig.parameters.keys()
+            parameters = mod_sig.parameters
         else:
             if isinstance(mod.__init__, types.MethodType):
                 mod_sig = inspect.getargspec(mod.__init__)
             elif hasattr(mod, '__call__'):
                 mod_sig = inspect.getargspec(mod.__call__)
             parameters = mod_sig.args
+        log.debug('Parameters accepted by module {0}: {1}'.format(module_name,
+                                                                  parameters))
         additional_args = {}
-        for arg in set(parameters).intersection(set(methods.keys())):
+        for arg in set(parameters).intersection(set(methods)):
             additional_args[arg] = methods.pop(arg)
         try:
             if len(parameters) > 1:
@@ -250,12 +253,14 @@ def _copy_function(module_name, name=None):
             else:
                 modinstance = mod()
         except TypeError:
-            modinstance = None
-        methods = {}
+            log.exception('Module failed to instantiate')
+        valid_methods = {}
+        log.debug('Called methods are: {0}'.format(methods))
         for meth_name in methods:
             if not meth_name.startswith('_'):
-                methods[meth_name] = methods[meth_name]
-        for meth, arg in methods.items():
+                valid_methods[meth_name] = methods[meth_name]
+        log.debug('Valid methods are: {0}'.format(valid_methods))
+        for meth, arg in valid_methods.items():
             result = _get_method_result(mod, modinstance, meth, arg)
             assertion_result = _apply_assertion(arg, result)
             if not assertion_result:

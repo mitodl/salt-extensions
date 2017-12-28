@@ -169,6 +169,67 @@ def initialize(secret_shares=5, secret_threshold=3, pgp_keys=None,
     return success, sealing_keys, root_token
 
 
+def scan_leases(prefix='', time_horizon=0):
+    """Scan all leases and generate an event for any that are near expiration
+
+    :param prefix: The prefix path of leases that you want to scan
+    :param time_horizon: How far in advance you want to be alerted for expiring leases (seconds)
+    :returns: List of lease info for leases expiring soon
+    :rtype: list
+
+    """
+    client = _build_client()
+    try:
+        prefixes = client.list('sys/leases/lookup/{0}'.format(prefix))
+    except hvac.exceptions.VaultError as e:
+        log.exception('Failed to retrieve lease information for prefix %s', prefix)
+        return []
+    if prefixes:
+        prefixes = prefixes.get('data', {}).get('keys', [])
+    else:
+        prefixes = []
+    expiring_leases = []
+    for node in prefixes:
+        if node.endswith('/'):
+            log.debug('Recursing into path %s for prefix %s', node, prefix)
+            expiring_leases.extend(scan_leases('{0}/{1}'.format(prefix.strip('/'), node), time_horizon))
+        else:
+            log.debug('Retrieving lease information for %s/%s', prefix, node)
+            try:
+                lease_info = client.write('sys/leases/lookup', lease_id='{0}/{1}'.format(prefix.strip('/'), node))
+            except hvac.exceptions.VaultError as e:
+                log.exception('Failed to retrieve lease information for %s',
+                              '{0}/{1}'.format(prefix.strip('/'), node))
+                continue
+            lease_expiry = datetime.strptime(lease_info.get('data', {}).get('expire_time')[:-4], '%Y-%m-%dT%H:%M:%S.%f')
+            lease_lifetime = lease_expiry - datetime.utcnow()
+            if lease_lifetime < timedelta(seconds=time_horizon):
+                __salt__['event.send']('vault/lease/expiring/{0}/{1}'.format(prefix, node), data=lease_info.get('data', {}))
+                expiring_leases.append(lease_info.get('data', {}))
+    return expiring_leases
+
+
+def clean_expired_leases(prefix='', time_horizon=0):
+    """Scan all leases and delete any that have an expiration beyond the specified time horizon
+
+    :param prefix: The prefix path of leases that you want to scan
+    :param time_horizon: How far in advance you want to be alerted for expiring leases (seconds)
+    :returns: List of lease info for leases that were deleted
+    :rtype: list
+
+    """
+    client = _build_client()
+    expired_leases = scan_leases(prefix, time_horizon)
+    for index, lease in enumerate(expired_leases):
+        try:
+            client.write('sys/leases/revoke', lease_id=lease['id'])
+        except hvac.exceptions.VaultError:
+            log.exception('Failed to revoke lease %s', lease['id'])
+            expired_leases.pop(index)
+            continue
+    return expired_leases
+
+
 def _register_functions():
     method_dict = {}
     for method_name in dir(hvac.Client):

@@ -170,7 +170,7 @@ def initialize(secret_shares=5, secret_threshold=3, pgp_keys=None,
     return success, sealing_keys, root_token
 
 
-def scan_leases(prefix='', time_horizon=0):
+def scan_leases(prefix='', time_horizon=0, send_events=True):
     """Scan all leases and generate an event for any that are near expiration
 
     :param prefix: The prefix path of leases that you want to scan
@@ -205,7 +205,8 @@ def scan_leases(prefix='', time_horizon=0):
             lease_expiry = datetime.strptime(lease_info.get('data', {}).get('expire_time')[:-4], '%Y-%m-%dT%H:%M:%S.%f')
             lease_lifetime = lease_expiry - datetime.utcnow()
             if lease_lifetime < timedelta(seconds=time_horizon):
-                __salt__['event.send']('vault/lease/expiring/{0}/{1}'.format(prefix, node), data=lease_info.get('data', {}))
+                if send_events:
+                    __salt__['event.send']('vault/lease/expiring/{0}/{1}'.format(prefix, node), data=lease_info.get('data', {}))
                 expiring_leases.append(lease_info.get('data', {}))
     return expiring_leases
 
@@ -220,7 +221,7 @@ def clean_expired_leases(prefix='', time_horizon=0):
 
     """
     client = _build_client()
-    expired_leases = scan_leases(prefix, time_horizon)
+    expired_leases = scan_leases(prefix, time_horizon, send_events=False)
     for index, lease in enumerate(expired_leases):
         try:
             client.write('sys/leases/revoke', lease_id=lease['id'])

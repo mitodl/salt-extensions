@@ -616,7 +616,8 @@ def ec2_minion_authenticated(name, role, pkcs7=None, nonce=None,
                                                      nonce=nonce)
             client_config = {
                 'vault.token': auth_result['auth']['client_token'],
-                'vault.nonce': auth_result['auth']['metadata']['nonce']
+                'vault.nonce': auth_result['auth']['metadata'].get('nonce',
+                                                                   nonce)
             }
             vault_conf_files = []
             if not client_conf_files:

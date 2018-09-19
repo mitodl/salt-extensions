@@ -74,6 +74,7 @@ def _query(api_key=None, endpoint=None, arguments=None, method='GET', data=None)
     api_url = 'https://api.heroku.com'  # default API URL
     url = _urljoin(api_url, endpoint)
     if arguments:
+        url = url + '/'
         url = _urljoin(url, arguments)
 
     if endpoint:
@@ -137,7 +138,7 @@ def app_info(app_name, api_key = None):
     https://devcenter.heroku.com/articles/platform-api-reference#app-info
 
     CLI Example:
-    salt-call heroku.app_info
+    salt-call heroku.app_info <app_name>
     '''
 
     result = _query(endpoint='apps', arguments = app_name, api_key = api_key)
@@ -150,7 +151,7 @@ def list_app_addons(app_name, api_key = None):
     https://devcenter.heroku.com/articles/platform-api-reference#add-on-list-by-app
 
     CLI Examples:
-    salt-call heroku.list_app_addons
+    salt-call heroku.list_app_addons <app_name>
     '''
 
     result = _query(endpoint='apps',
@@ -165,7 +166,7 @@ def list_app_attachments(app_name, api_key = None):
     https://devcenter.heroku.com/articles/platform-api-reference#add-on-attachment-list
 
     CLI Examples:
-    salt-call heroku.list_app_attachments
+    salt-call heroku.list_app_attachments <app_name>
     '''
 
     result = _query(endpoint='apps',
@@ -180,7 +181,7 @@ def list_app_buildpacks(app_name, api_key = None):
     https://devcenter.heroku.com/articles/platform-api-reference#buildpack-installations-list
 
     CLI Examples:
-    salt-call heroku.list_app_buildpacks
+    salt-call heroku.list_app_buildpacks <app_name>
     '''
 
     result = _query(endpoint='apps',
@@ -195,7 +196,7 @@ def list_app_config_vars(app_name, api_key = None):
     https://devcenter.heroku.com/articles/platform-api-reference#config-vars
 
     CLI Examples:
-    salt-call heroku.list_app_config_vars
+    salt-call heroku.list_app_config_vars <app_name>
     '''
     result = _query(endpoint='apps',
                arguments=app_name+'/config-vars',
@@ -210,10 +211,10 @@ def update_app_config_vars(app_name, vars, api_key = None):
 
     CLI Examples:
     - Set/Modify config variable:
-      salt-call heroku.update_config_vars data='{"name":"value"}'
+      salt-call heroku.update_config_vars <app_name> data='{"name":"value"}'
 
     - Delete config variable:
-      salt-call heroku.update_config_vars data='{"name":null}'
+      salt-call heroku.update_config_vars <app_name> data='{"name":null}'
     '''
     result = _query(endpoint='apps',
                arguments=app_name+'/config-vars',
@@ -232,7 +233,7 @@ def list_app_dynos(app_name, api_key=None):
     https://devcenter.heroku.com/articles/platform-api-reference#dyno-list
 
     CLI Examples:
-    salt-call heroku.list_app_dynos
+    salt-call heroku.list_app_dynos <app_name>
     '''
     result = _query(endpoint = 'apps', arguments = app_name+'/dynos', api_key = api_key)
     log.debug('result {0}'.format(result))
@@ -244,7 +245,7 @@ def restart_app_dynos(app_name, api_key=None):
     https://devcenter.heroku.com/articles/platform-api-reference#dyno-restart-all
 
     CLI Examples:
-    salt-call heroku.restart_app_dynos
+    salt-call heroku.restart_app_dynos <app_name>
     '''
     result = _query(endpoint = 'apps', arguments = app_name+'/dynos', method = 'DELETE', api_key = api_key)
     log.debug('result {0}'.format(result))

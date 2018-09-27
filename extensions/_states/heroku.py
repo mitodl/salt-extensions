@@ -2,8 +2,6 @@
 '''
 State for managing heroku apps.
 
-.. versionadded:: 2015.5.0
-
 :configuration: This state can be used by either passing an api key directly
     or by specifying it in a configuration profile in pillar.
 
@@ -22,10 +20,6 @@ import logging
 
 import sys
 import salt.config
-import salt.exceptions
-import salt.ext.six.moves.http_client
-import salt.syspaths
-import salt.utils
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +42,7 @@ def __virtual__():
     return True
 
 
-def diff_app_config_vars(name, config_vars, api_key):
+def _diff_app_config_vars(name, config_vars, api_key):
     '''
     Compare keys and values between Heroku and Pillar config vars.
     This function makes no changes to Heroku config vars and only
@@ -134,7 +128,7 @@ def update_app_config_vars(name, config_vars, api_key):
            'result': True,
            'changes': {}}
 
-    diff_app_config_vars(name, config_vars, api_key)
+    _diff_app_config_vars(name, config_vars, api_key)
     if any(v for v in diff_heroku_pillar_dict.values()):
         __salt__['heroku.update_app_config_vars'](name, config_vars, api_key)
         new_app_config_vars = __salt__['heroku.list_app_config_vars'](name, api_key)

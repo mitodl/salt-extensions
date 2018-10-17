@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 __virtualname__ = 'http_status'
 
 comparisons = {
-  '=': operator.eq,
+  '==': operator.eq,
   '<': operator.lt,
   '>': operator.gt,
   '<=': operator.le,
@@ -54,9 +54,9 @@ def validate(config):
             else:
                 for sites in _config['sites']:
                     log.debug('_config %s', _config['sites'][sites])
-                    if 'status_endpoint' not in _config['sites'][sites]:
+                    if 'url' not in _config['sites'][sites]:
                         return False, ('Sites for %s beacon '
-                                       'requires status_endpoint.', __virtualname__)
+                                       'requires url.', __virtualname__)
                     if 'json_response' not in _config['sites'][sites]:
                         return False, ('Sites for %s beacon '
                                        'requires json_response.', __virtualname__)
@@ -79,7 +79,7 @@ def beacon(config):
           http_status:
             - sites:
                 example-site-1:
-                  status_endpoint: "https://example.com/status"
+                  url: "https://example.com/status"
                   json_response:
                     - path: 'redis:status'
                       value: 'up'
@@ -99,12 +99,12 @@ def beacon(config):
 
     for sites in _config.get('sites', ()):
         sites_config = _config['sites'][sites]
-        status_endpoint = sites_config['status_endpoint']
+        url = sites_config['url']
         try:
             if 'timeout' in sites_config:
-                r = requests.get(status_endpoint, timeout=sites_config['timeout'])
+                r = requests.get(url, timeout=sites_config['timeout'])
             else:
-                r = requests.get(status_endpoint, timeout=30)
+                r = requests.get(url, timeout=30)
         except requests.exceptions.RequestException as e:
             log.debug("Request failed: ", e)
         for json_response_item in sites_config['json_response']:

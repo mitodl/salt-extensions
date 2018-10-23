@@ -95,7 +95,7 @@ def beacon(config):
     ret = []
 
     _config = {}
-    list(map(_config.update, config))
+    list(map(_config.update, config['beacons']['http_status']))
 
     for sites in _config.get('sites', ()):
         sites_config = _config['sites'][sites]

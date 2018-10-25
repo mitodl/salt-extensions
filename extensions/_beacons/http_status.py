@@ -111,7 +111,7 @@ def beacon(config):
         if r.status_code >= 500:
             log.debug('Response from status endpoint was invalid: '
                       '%s', r.status_code)
-        for json_response_item in sites_config['json_response']:
+         for json_response_item in sites_config.get('json_response', []):
             if ':' in json_response_item['path']:
                 service = json_response_item['path'].split(':')[0]
                 service_value = json_response_item['path'].split(':')[1]

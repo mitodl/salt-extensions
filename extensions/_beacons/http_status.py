@@ -131,7 +131,7 @@ def beacon(config):
             else:
                 log.debug('Server status response does not include listed '
                           'service in path: %s', service)
-        if 'html_response' in sites_config:
+        for html_response_item in sites_config.get('html_response', []):
             for html_response_item in sites_config['html_response']:
                 search_value = html_response_item['value']
                 comp = comparisons[html_response_item['comp']]

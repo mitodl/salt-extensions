@@ -11,7 +11,7 @@ import logging
 import operator
 import re
 import requests
-import salt.utils
+import salt.utils.data
 from salt.ext.six.moves import map
 
 log = logging.getLogger(__name__)
@@ -19,13 +19,13 @@ log = logging.getLogger(__name__)
 __virtualname__ = 'http_status'
 
 comparisons = {
-  '==': operator.eq,
-  '<': operator.lt,
-  '>': operator.gt,
-  '<=': operator.le,
-  '>=': operator.ge,
-  '!=': operator.ne,
-  'search': re.search
+    '==': operator.eq,
+    '<': operator.lt,
+    '>': operator.gt,
+    '<=': operator.le,
+    '>=': operator.ge,
+    '!=': operator.ne,
+    'search': re.search
 }
 
 
@@ -39,7 +39,7 @@ def validate(config):
     '''
     if not isinstance(config, list):
         return False, ('Configuration for %s beacon must '
-                       'be a list.', __virtualname__)
+                       'be a list.', config)
     else:
         _config = {}
         list(map(_config.update, config))
@@ -48,9 +48,9 @@ def validate(config):
             return False, ('Configuration for %s beacon '
                            'requires sites.', __virtualname__)
         else:
-            if not isinstance(_config['sites'], list):
+            if not isinstance(_config['sites'], dict):
                 return False, ('Sites for %s beacon '
-                               'must be a list.', __virtualname__)
+                               'must be a dict.', __virtualname__)
             else:
                 for sites in _config['sites']:
                     log.debug('_config %s', _config['sites'][sites])
@@ -62,9 +62,9 @@ def validate(config):
                                        'requires json_response.', __virtualname__)
                     else:
                         _json_response = _config['sites'][sites]['json_response']
-                        if not isinstance(_json_response, dict):
+                        if not isinstance(_json_response, list):
                             return False, ('json_response for %s beacon '
-                                           'must be a dict.', __virtualname__)
+                                           'must be a list.', __virtualname__)
     return True, 'Valid beacon configuration'
 
 
@@ -95,7 +95,7 @@ def beacon(config):
     ret = []
 
     _config = {}
-    list(map(_config.update, config['beacons']['http_status']))
+    list(map(_config.update, config))
 
     for sites in _config.get('sites', ()):
         sites_config = _config['sites'][sites]
@@ -105,28 +105,36 @@ def beacon(config):
                 r = requests.get(url, timeout=sites_config['timeout'])
             else:
                 r = requests.get(url, timeout=30)
+        # r.status_code
         except requests.exceptions.RequestException as e:
-            log.debug("Request failed: ", e)
-        for json_response_item in sites_config['json_response']:
-            service = json_response_item['path'].split(':')[0]
-            service_value = json_response_item['path'].split(':')[1]
+            log.debug("Request failed: %s", e)
+        if r.status_code >= 500:
+            log.debug('Response from status endpoint was invalid: '
+                      '%s', r.status_code)
+        for json_response_item in sites_config.get('json_response', []):
+            if ':' in json_response_item['path']:
+                service = json_response_item['path'].split(':')[0]
+                service_value = json_response_item['path'].split(':')[1]
             if service in r.json():
                 if json_response_item['comp'] in comparisons:
                     comp = comparisons[json_response_item['comp']]
-                    if not comp(json_response_item['value'],
-                                r.json()[service][service_value]):
+                    expected_value = json_response_item['value']
+                    received_value = salt.utils.traverse_dict(r.json(), '{}:{}'.format(service, service_value))
+                    log.debug('********* expected_value: %s', expected_value)
+                    log.debug('********* received_value: %s', received_value)
+                    if not comp(expected_value, received_value):
                         _failed = {'service': service,
-                                   'status': json_response_item['value'],
-                                   'comp': comp,
+                                   'status': expected_value,
+                                   'comp': json_response_item['comp'],
                                    }
                         ret.append(_failed)
                 else:
                     log.debug('Comparison operator not in comparisons dict: '
-                              ' %s', json_response_item['value'])
+                              '%s', expected_value)
             else:
                 log.debug('Server status response does not include listed '
                           'service in path: %s', service)
-        for html_response_item in sites_config['html_response']:
+        for html_response_item in sites_config.get('html_response', []):
             search_value = html_response_item['value']
             comp = comparisons[html_response_item['comp']]
             if not comp(search_value, r.text):

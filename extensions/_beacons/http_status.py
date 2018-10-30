@@ -118,19 +118,19 @@ def beacon(config):
             if service in r.json():
                 if json_response_item['comp'] in comparisons:
                     comp = comparisons[json_response_item['comp']]
-                    json_response_value = json_response_item['value']
-                    response_service_value = salt.utils.traverse_dict(r.json(), '{}:{}'.format(service, service_value))
-                    log.debug('********* json_response_value: %s', json_response_value)
-                    log.debug('********* response_service_value: %s', response_service_value)
-                    if not comp(json_response_value, response_service_value):
+                    expected_value = json_response_item['value']
+                    received_value = salt.utils.traverse_dict(r.json(), '{}:{}'.format(service, service_value))
+                    log.debug('********* expected_value: %s', expected_value)
+                    log.debug('********* received_value: %s', received_value)
+                    if not comp(expected_value, received_value):
                         _failed = {'service': service,
-                                   'status': json_response_value,
+                                   'status': expected_value,
                                    'comp': json_response_item['comp'],
                                    }
                         ret.append(_failed)
                 else:
                     log.debug('Comparison operator not in comparisons dict: '
-                              '%s', json_response_value)
+                              '%s', expected_value)
             else:
                 log.debug('Server status response does not include listed '
                           'service in path: %s', service)

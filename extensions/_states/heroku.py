@@ -13,7 +13,7 @@ State for managing heroku apps.
     .. code-block:: yaml
 
         heroku.<name_of_state>:
-          - api_key: peWcBiMOS9HrZG15peWcBiMOS9HrZG15
+          - api_key: your_api_key
 '''
 from __future__ import absolute_import
 import logging

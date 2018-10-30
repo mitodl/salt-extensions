@@ -11,7 +11,7 @@ import logging
 import operator
 import re
 import requests
-import salt.utils
+import salt.utils.data
 from salt.ext.six.moves import map
 
 log = logging.getLogger(__name__)
@@ -111,30 +111,32 @@ def beacon(config):
         if r.status_code >= 500:
             log.debug('Response from status endpoint was invalid: '
                       '%s', r.status_code)
-         for json_response_item in sites_config.get('json_response', []):
+        for json_response_item in sites_config.get('json_response', []):
             if ':' in json_response_item['path']:
                 service = json_response_item['path'].split(':')[0]
                 service_value = json_response_item['path'].split(':')[1]
             if service in r.json():
                 if json_response_item['comp'] in comparisons:
                     comp = comparisons[json_response_item['comp']]
-                    if not comp(json_response_item['value'],
-                                r.json()[service][service_value]):
+                    json_response_value = json_response_item['value']
+                    response_service_value = salt.utils.traverse_dict(r.json(), '{}:{}'.format(service, service_value))
+                    log.debug('********* json_response_value: %s', json_response_value)
+                    log.debug('********* response_service_value: %s', response_service_value)
+                    if not comp(json_response_value, response_service_value):
                         _failed = {'service': service,
-                                   'status': json_response_item['value'],
+                                   'status': json_response_value,
                                    'comp': json_response_item['comp'],
                                    }
                         ret.append(_failed)
                 else:
                     log.debug('Comparison operator not in comparisons dict: '
-                              '%s', json_response_item['value'])
+                              '%s', json_response_value)
             else:
                 log.debug('Server status response does not include listed '
                           'service in path: %s', service)
         for html_response_item in sites_config.get('html_response', []):
-            for html_response_item in sites_config['html_response']:
-                search_value = html_response_item['value']
-                comp = comparisons[html_response_item['comp']]
-                if not comp(search_value, r.text):
-                    ret.append({'keyword': search_value})
+            search_value = html_response_item['value']
+            comp = comparisons[html_response_item['comp']]
+            if not comp(search_value, r.text):
+                ret.append({'keyword': search_value})
     return ret

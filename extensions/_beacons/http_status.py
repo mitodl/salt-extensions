@@ -120,8 +120,6 @@ def beacon(config):
                     comp = comparisons[json_response_item['comp']]
                     expected_value = json_response_item['value']
                     received_value = salt.utils.traverse_dict(r.json(), '{}:{}'.format(service, service_value))
-                    log.debug('********* expected_value: %s', expected_value)
-                    log.debug('********* received_value: %s', received_value)
                     if not comp(expected_value, received_value):
                         _failed = {'service': service,
                                    'status': expected_value,

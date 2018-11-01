@@ -28,6 +28,9 @@ comparisons = {
     'search': re.search
 }
 
+required_site_attributes = {'url'}
+optional_site_attributes = {'json_response'}
+
 
 def __virtual__():
     return __virtualname__
@@ -44,27 +47,22 @@ def validate(config):
         _config = {}
         list(map(_config.update, config))
 
-        if 'sites' not in _config:
-            return False, ('Configuration for %s beacon '
-                           'requires sites.', __virtualname__)
-        else:
-            if not isinstance(_config['sites'], dict):
-                return False, ('Sites for %s beacon '
-                               'must be a dict.', __virtualname__)
-            else:
-                for sites in _config['sites']:
-                    log.debug('_config %s', _config['sites'][sites])
-                    if 'url' not in _config['sites'][sites]:
-                        return False, ('Sites for %s beacon '
-                                       'requires url.', __virtualname__)
-                    if 'json_response' not in _config['sites'][sites]:
-                        return False, ('Sites for %s beacon '
-                                       'requires json_response.', __virtualname__)
-                    else:
-                        _json_response = _config['sites'][sites]['json_response']
-                        if not isinstance(_json_response, list):
-                            return False, ('json_response for %s beacon '
-                                           'must be a list.', __virtualname__)
+    try:
+        sites = _config.get('sites', {})
+    except AttributeError:
+        return False, ('Sites for %s beacon '
+                       'must be a dict.', __virtualname__)
+    if not sites:
+        return False, ('You neglected to define any sites')
+
+    for site, settings in sites.iteritems():
+        if required_site_attributes.isdisjoint(set(settings.keys())):
+            return False, ('Sites for {} beacon requires {}'.format(__virtualname__,
+                                                                    required_site_attributes))
+            if optional_site_attributes and optional_site_attributes.isdisjoint(set(settings.keys())):
+                return False, ('Sites for {} beacon requires {}'.format(__virtualname__,
+                                                                        optional_site_attributes))
+
     return True, 'Valid beacon configuration'
 
 
@@ -101,37 +99,37 @@ def beacon(config):
         sites_config = _config['sites'][sites]
         url = sites_config['url']
         try:
-            if 'timeout' in sites_config:
-                r = requests.get(url, timeout=sites_config['timeout'])
-            else:
-                r = requests.get(url, timeout=30)
-        # r.status_code
+            r = requests.get(url, timeout=sites_config.get('timeout', 30))
         except requests.exceptions.RequestException as e:
-            log.debug("Request failed: %s", e)
-        if r.status_code >= 500:
-            log.debug('Response from status endpoint was invalid: '
-                      '%s', r.status_code)
+            log.info("Request failed: %s", e)
+            if r.raise_for_status:
+                log.info('Response from status endpoint was invalid: '
+                         '%s', r.status_code)
+                _failed = {'status_code': r.status_code}
+                ret.append(_failed)
+                continue
         for json_response_item in sites_config.get('json_response', []):
-            if ':' in json_response_item['path']:
-                service = json_response_item['path'].split(':')[0]
-                service_value = json_response_item['path'].split(':')[1]
-            if service in r.json():
-                if json_response_item['comp'] in comparisons:
-                    comp = comparisons[json_response_item['comp']]
-                    expected_value = json_response_item['value']
-                    received_value = salt.utils.traverse_dict(r.json(), '{}:{}'.format(service, service_value))
-                    if not comp(expected_value, received_value):
-                        _failed = {'service': service,
-                                   'status': expected_value,
-                                   'comp': json_response_item['comp'],
-                                   }
-                        ret.append(_failed)
-                else:
-                    log.debug('Comparison operator not in comparisons dict: '
-                              '%s', expected_value)
+            log.debug('[+] json_response_item: %s', json_response_item)
+            if json_response_item['comp'] in comparisons:
+                attr_path = json_response_item['path']
+                comp = comparisons[json_response_item['comp']]
+                expected_value = json_response_item['value']
+                received_value = salt.utils.data.traverse_dict_and_list(r.json(), attr_path)
+                if received_value is None:
+                    log.info('No data found at location {} for url {}'.format(attr_path, url))
+                    continue
+                log.debug('[+] expected_value: %s', expected_value)
+                log.debug('[+] received_value: %s', received_value)
+                if not comp(expected_value, received_value):
+                    _failed = {'expected': expected_value,
+                               'received': received_value,
+                               'url': url,
+                               'path': attr_path
+                               }
+                    ret.append(_failed)
             else:
-                log.debug('Server status response does not include listed '
-                          'service in path: %s', service)
+                log.info('Comparison operator not in comparisons dict: '
+                         '%s', expected_value)
         for html_response_item in sites_config.get('html_response', []):
             search_value = html_response_item['value']
             comp = comparisons[html_response_item['comp']]

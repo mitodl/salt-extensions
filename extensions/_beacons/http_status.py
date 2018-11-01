@@ -55,13 +55,16 @@ def validate(config):
     if not sites:
         return False, ('You neglected to define any sites')
 
-    for site, settings in sites.iteritems():
+    for site, settings in sites.items():
         if required_site_attributes.isdisjoint(set(settings.keys())):
             return False, ('Sites for {} beacon requires {}'.format(__virtualname__,
                                                                     required_site_attributes))
-            if optional_site_attributes and optional_site_attributes.isdisjoint(set(settings.keys())):
+        try:
+            if optional_site_attributes.isdisjoint(set(settings.keys())):
                 return False, ('Sites for {} beacon requires {}'.format(__virtualname__,
                                                                         optional_site_attributes))
+        except NameError:
+            log.info('No optional attributes defined')
 
     return True, 'Valid beacon configuration'
 
@@ -105,7 +108,8 @@ def beacon(config):
             if r.raise_for_status:
                 log.info('Response from status endpoint was invalid: '
                          '%s', r.status_code)
-                _failed = {'status_code': r.status_code}
+                _failed = {'status_code': r.status_code,
+                           'url': url}
                 ret.append(_failed)
                 continue
         for json_response_item in sites_config.get('json_response', []):
@@ -127,9 +131,6 @@ def beacon(config):
                                'path': attr_path
                                }
                     ret.append(_failed)
-            else:
-                log.info('Comparison operator not in comparisons dict: '
-                         '%s', expected_value)
         for html_response_item in sites_config.get('html_response', []):
             search_value = html_response_item['value']
             comp = comparisons[html_response_item['comp']]

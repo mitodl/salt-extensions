@@ -11,6 +11,7 @@ import logging
 import operator
 import re
 import requests
+import itertools
 import salt.utils.data
 from salt.ext.six.moves import map
 
@@ -28,8 +29,13 @@ comparisons = {
     'search': re.search
 }
 
+attr_func_map = {
+  'status': lambda x: x.status_code,
+  'content': lambda x: x.json()
+}
+
 required_site_attributes = {'url'}
-optional_site_attributes = {'json_response'}
+optional_site_attributes = {'content', 'status'}
 
 
 def __virtual__():
@@ -40,9 +46,12 @@ def validate(config):
     '''
     Validate the beacon configuration
     '''
+    valid = True
+    messages = []
+
     if not isinstance(config, list):
-        return False, ('Configuration for %s beacon must '
-                       'be a list.', config)
+        valid = False
+        messages.append('[-] Configuration for %s beacon must be a list', config)
     else:
         _config = {}
         list(map(_config.update, config))
@@ -50,23 +59,30 @@ def validate(config):
     try:
         sites = _config.get('sites', {})
     except AttributeError:
-        return False, ('Sites for %s beacon '
-                       'must be a dict.', __virtualname__)
+        valid = False
+        messages.append('[-] Sites for %s beacon must be a dict', __virtualname__)
+
     if not sites:
-        return False, ('You neglected to define any sites')
+        valid = False
+        messages.append('[-] Configuration does not contain sites')
 
     for site, settings in sites.items():
         if required_site_attributes.isdisjoint(set(settings.keys())):
-            return False, ('Sites for {} beacon requires {}'.format(__virtualname__,
-                                                                    required_site_attributes))
-        try:
-            if optional_site_attributes.isdisjoint(set(settings.keys())):
-                return False, ('Sites for {} beacon requires {}'.format(__virtualname__,
-                                                                        optional_site_attributes))
-        except NameError:
-            log.info('No optional attributes defined')
+            valid = False
+            messages.append('[-] Sites for {} beacon requires {}'.format(__virtualname__,
+                                                                         required_site_attributes))
+        log.debug('[+] site: %s', site)
+        log.debug('[+] settings: %s', settings)
 
-    return True, 'Valid beacon configuration'
+        for optional_attrs in itertools.chain(settings.get(attr, []) for attr in optional_site_attributes):
+            for item in optional_attrs:
+                cmp = item.get('comp')
+                if cmp and not cmp in comparisons:
+                    valid = False
+                    messages.append('Invalid comparison operator %s', cmp)
+
+    messages.append('[+] Valid beacon configuration')
+    return valid, messages
 
 
 def beacon(config):
@@ -81,28 +97,30 @@ def beacon(config):
             - sites:
                 example-site-1:
                   url: "https://example.com/status"
-                  json_response:
-                    - path: 'redis:status'
-                      value: 'up'
-                      comp: '='
-                    - path: 'postgresql:response_microseconds'
-                      value: 50
-                      comp: '<='
-                  html_response:
-                    - path: ''
-                      value: 'foo.*bar'
-                      comp: search
+                  status:
+                    - value: 400
+                      comp: <
+                    - value: 300
+                      comp: '>='
+                  content:
+                    - path: 'certificate:status'
+                      value: down
+                      comp: '=='
+                    - path: 'status_all'
+                      value: down
+                      comp: '=='
+            - interval: 10
     '''
     ret = []
 
     _config = {}
     list(map(_config.update, config))
 
-    for sites in _config.get('sites', ()):
-        sites_config = _config['sites'][sites]
-        url = sites_config['url']
+    for site, site_config in _config.get('sites', {}).items():
+        url = site_config.pop('url')
+        content_type = site_config.pop('content_type', 'json')
         try:
-            r = requests.get(url, timeout=sites_config.get('timeout', 30))
+            r = requests.get(url, timeout=site_config.pop('timeout', 30))
         except requests.exceptions.RequestException as e:
             log.info("Request failed: %s", e)
             if r.raise_for_status:
@@ -112,13 +130,17 @@ def beacon(config):
                            'url': url}
                 ret.append(_failed)
                 continue
-        for json_response_item in sites_config.get('json_response', []):
-            log.debug('[+] json_response_item: %s', json_response_item)
-            if json_response_item['comp'] in comparisons:
-                attr_path = json_response_item['path']
-                comp = comparisons[json_response_item['comp']]
-                expected_value = json_response_item['value']
-                received_value = salt.utils.data.traverse_dict_and_list(r.json(), attr_path)
+
+        for attr, checks in site_config.items():
+            for check in checks:
+                log.debug('[+] response_item: %s', attr)
+                attr_path = check.get('path', '')
+                comp = comparisons[check['comp']]
+                expected_value = check['value']
+                if attr_path:
+                    received_value = salt.utils.data.traverse_dict_and_list(attr_func_map[attr](r), attr_path)
+                else:
+                    received_value = attr_func_map[attr](r)
                 if received_value is None:
                     log.info('No data found at location {} for url {}'.format(attr_path, url))
                     continue
@@ -131,9 +153,4 @@ def beacon(config):
                                'path': attr_path
                                }
                     ret.append(_failed)
-        for html_response_item in sites_config.get('html_response', []):
-            search_value = html_response_item['value']
-            comp = comparisons[html_response_item['comp']]
-            if not comp(search_value, r.text):
-                ret.append({'keyword': search_value})
     return ret

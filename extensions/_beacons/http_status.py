@@ -79,7 +79,7 @@ def validate(config):
                 cmp = item.get('comp')
                 if cmp and not cmp in comparisons:
                     valid = False
-                    messages.append('Invalid comparison operator %s', cmp)
+                    messages.append('[-] Invalid comparison operator %s', cmp)
 
     messages.append('[+] Valid beacon configuration')
     return valid, messages
@@ -97,6 +97,8 @@ def beacon(config):
             - sites:
                 example-site-1:
                   url: "https://example.com/status"
+                  timeout: 30
+                  content-type: json
                   status:
                     - value: 400
                       comp: <
@@ -124,7 +126,7 @@ def beacon(config):
         except requests.exceptions.RequestException as e:
             log.info("Request failed: %s", e)
             if r.raise_for_status:
-                log.info('Response from status endpoint was invalid: '
+                log.info('[-] Response from status endpoint was invalid: '
                          '%s', r.status_code)
                 _failed = {'status_code': r.status_code,
                            'url': url}
@@ -142,7 +144,7 @@ def beacon(config):
                 else:
                     received_value = attr_func_map[attr](r)
                 if received_value is None:
-                    log.info('No data found at location {} for url {}'.format(attr_path, url))
+                    log.info('[-] No data found at location {} for url {}'.format(attr_path, url))
                     continue
                 log.debug('[+] expected_value: %s', expected_value)
                 log.debug('[+] received_value: %s', received_value)

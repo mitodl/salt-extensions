@@ -148,7 +148,7 @@ def beacon(config):
                     continue
                 log.debug('[+] expected_value: %s', expected_value)
                 log.debug('[+] received_value: %s', received_value)
-                if not comp(expected_value, received_value):
+                if not comp(received_value, expected_value):
                     _failed = {'expected': expected_value,
                                'received': received_value,
                                'url': url,

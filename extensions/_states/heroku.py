@@ -17,9 +17,8 @@ State for managing heroku apps.
 '''
 from __future__ import absolute_import
 import logging
-
-import sys
 import salt.config
+import sys
 
 log = logging.getLogger(__name__)
 
@@ -89,7 +88,6 @@ def _diff_heroku_pillar_vars(app_config_vars, config_vars):
     :returns: three global dicts
     '''
 
-
     global diff_heroku_pillar_dict, heroku_diff_dict, pillar_diff_dict
     app_config_vars_set = set(app_config_vars.items())
     config_vars_set = set(config_vars.items())
@@ -122,18 +120,23 @@ def update_app_config_vars(name, config_vars, api_key):
     :rtype: dict
     '''
 
-
     ret = {'name': name,
            'comment': '',
            'result': True,
            'changes': {}}
 
-    _diff_app_config_vars(name, config_vars, api_key)
+    diff_app_config_vars = _diff_app_config_vars(name, config_vars, api_key)
+    if __opts__['test']:
+        ret['result'] = None
+        ret['comment'] = 'Following changes would be performed'
+        ret['changes'] = diff_app_config_vars
+        return ret
     if any(v for v in diff_heroku_pillar_dict.values()):
         __salt__['heroku.update_app_config_vars'](name, config_vars, api_key)
         new_app_config_vars = __salt__['heroku.list_app_config_vars'](name, api_key)
         ret['changes']['new'] = {'heroku': new_app_config_vars}
     return ret
+
 
 def override_app_config_vars(name, config_vars, api_key):
     '''
@@ -148,7 +151,6 @@ def override_app_config_vars(name, config_vars, api_key):
     :rtype: dict
     '''
 
-
     ret = {'name': name,
            'comment': 'Heroku config variables have been overwritten',
            'result': True,
@@ -156,6 +158,11 @@ def override_app_config_vars(name, config_vars, api_key):
 
     try:
         app_config_vars = __salt__['heroku.list_app_config_vars'](name, api_key)
+        if __opts__['test']:
+            ret['result'] = None
+            ret['comment'] = 'Following changes would be performed'
+            ret['changes'] = config_vars
+            return ret
         empty_values = dict.fromkeys(app_config_vars)
         for key, value in empty_values.items():
             if value is None:

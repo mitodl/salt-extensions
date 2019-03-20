@@ -4,16 +4,6 @@ from extensions._modules import testinframod
 
 class TestinframodTestCase(TestCase):
 
-    def test_to_pascal_case(self):
-        for testinput, expected in [
-                ('file', 'File'),
-                ('system_info', 'SystemInfo'),
-                ('Package', 'Package'),
-                ('camelCase', 'CamelCase'),
-                ('Pascal_With_Underscores', 'PascalWithUnderscores')]:
-            self.assertEqual(testinframod._to_pascal_case(testinput), expected)
-
-
     def test_to_snake_case(self):
         for testinput, expected in [
                 ('File', 'file'),

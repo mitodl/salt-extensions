@@ -50,7 +50,7 @@ def _get_module(module_name, backend=default_backend):
     :rtype: object
 
     """
-    backend_instance = testinfra.get_backend(backend)
+    backend_instance = testinfra.backend.get_backend(backend)
     return backend_instance.get_module(_to_pascal_case(module_name))
 
 

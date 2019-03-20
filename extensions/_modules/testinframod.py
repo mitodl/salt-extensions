@@ -50,9 +50,24 @@ def _get_module(module_name, backend=default_backend):
     :rtype: object
 
     """
-    host = testinfra.get_host(default_backend)
-    cls = testinfra.modules.get_module_class(module_name)
-    return cls.get_module_class(host)
+    backend_instance = testinfra.backend.get_backend(backend)
+    return backend_instance.get_module(_to_pascal_case(module_name))
+
+
+def _to_pascal_case(snake_case):
+    """Convert a snake_case string to its PascalCase equivalent.
+
+    :param snake_case: snake_cased string to be converted
+    :returns: PascalCase string
+    :rtype: str
+
+    """
+    space_case = re.sub('_', ' ', snake_case)
+    wordlist = []
+    for word in space_case.split():
+        wordlist.append(word[0].upper())
+        wordlist.append(word[1:])
+    return ''.join(wordlist)
 
 
 def _to_snake_case(pascal_case):

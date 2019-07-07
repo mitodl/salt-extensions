@@ -50,39 +50,8 @@ def _get_module(module_name, backend=default_backend):
     :rtype: object
 
     """
-    backend_instance = testinfra.get_backend(backend)
-    return backend_instance.get_module(_to_pascal_case(module_name))
-
-
-def _to_pascal_case(snake_case):
-    """Convert a snake_case string to its PascalCase equivalent.
-
-    :param snake_case: snake_cased string to be converted
-    :returns: PascalCase string
-    :rtype: str
-
-    """
-    space_case = re.sub('_', ' ', snake_case)
-    wordlist = []
-    for word in space_case.split():
-        wordlist.append(word[0].upper())
-        wordlist.append(word[1:])
-    return ''.join(wordlist)
-
-
-def _to_snake_case(pascal_case):
-    """Convert a PascalCase string to its snake_case equivalent.
-
-    :param pascal_case: PascalCased string to be converted
-    :returns: snake_case string
-    :rtype: str
-
-    """
-    snake_case = re.sub('(^|[a-z])([A-Z])',
-                        lambda match: '{0}_{1}'.format(match.group(1).lower(),
-                                                       match.group(2).lower()),
-                        pascal_case)
-    return snake_case.lower().strip('_')
+    backend_instance = testinfra.get_host(backend)
+    return backend_instance.__getattr__(module_name)
 
 
 def _get_method_result(module_, module_instance, method_name, method_arg=None):
@@ -289,10 +258,7 @@ def _register_functions():
     functions, and then register them in the module namespace so that they
     can be called via salt.
     """
-    try:
-        modules_ = [_to_snake_case(module_) for module_ in modules.__all__]
-    except AttributeError:
-        modules_ = [module_ for module_ in modules.modules]
+    modules_ = [module_ for module_ in modules.modules]
 
     for mod_name in modules_:
         mod_func = _copy_function(mod_name, str(mod_name))

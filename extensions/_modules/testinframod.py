@@ -205,12 +205,18 @@ def _copy_function(module_name, name=None):
         if hasattr(inspect, 'signature'):
             mod_sig = inspect.signature(mod)
             parameters = mod_sig.parameters
-        else:
-            if isinstance(mod.__init__, types.MethodType):
-                mod_sig = inspect.getargspec(mod.__init__)
-            elif hasattr(mod, '__call__'):
-                mod_sig = inspect.getargspec(mod.__call__)
+        elif isinstance(mod.__init__, types.MethodType):
+            mod_sig = inspect.getargspec(mod.__init__)
             parameters = mod_sig.args
+        elif hasattr(mod, '__call__'):
+            mod_sig = inspect.getargspec(mod.__call__)
+            parameters = mod_sig.args
+        else:
+            parameters = []
+            mod_sig = inspect.getmembers(mod, predicate=inspect.ismethod)
+            for k,v in mod_sig:
+                parameters.append(k)
+
         log.debug('Parameters accepted by module {0}: {1}'.format(module_name,
                                                                   parameters))
         additional_args = {}

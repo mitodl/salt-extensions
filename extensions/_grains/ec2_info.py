@@ -2,19 +2,23 @@
 # -*- coding: utf-8 -*-
 ################################################################
 # This was copied wholesale from https://github.com/saltstack/salt-contrib
-# on 2016-07-05 to simplify usage of contrib modules without requiring the
+# on 2019-10-01 to simplify usage of contrib modules without requiring the
 # entire repository. - TMM
 ################################################################
 """
 Get some grains information that is only available in Amazon AWS
-
 Author: Erik Günther, J C Lawrence <claw@kanga.nu>, Mark McGuire
-
 """
+from __future__ import absolute_import
+
 import logging
-import httplib
 import socket
 import json
+try:
+    from http.client import HTTPConnection, BadStatusLine
+except ImportError:
+    from salt.ext.six.moves.http_client import HTTPConnection, BadStatusLine
+
 
 # Set up logging
 LOG = logging.getLogger(__name__)
@@ -24,9 +28,8 @@ def _call_aws(url):
     """
     Call AWS via httplib. Require correct path.
     Host: 169.254.169.254
-
     """
-    conn = httplib.HTTPConnection("169.254.169.254", 80, timeout=1)
+    conn = HTTPConnection("169.254.169.254", 80, timeout=1)
     conn.request('GET', url)
     return conn.getresponse()
 
@@ -35,19 +38,20 @@ def _get_ec2_hostinfo(path=""):
     """
     Recursive function that walks the EC2 metadata available to each minion.
     :param path: URI fragment to append to /latest/meta-data/
-
     Returns a nested dictionary containing all the EC2 metadata. All keys
     are converted from dash case to snake case.
     """
-    resp = _call_aws("/latest/meta-data/%s" % path)
-    resp_data = resp.read().strip()
+    resp = _call_aws("/latest/meta-data/{0}".format(path))
+    resp_data = resp.read().decode('utf-8').strip()
     d = {}
     for line in resp_data.split("\n"):
         if path == "public-keys/":
             line = line.split("=")[0] + "/"
+        if path == "instance-id/":
+            return {'instance-id': line}
         if line[-1] != "/":
-            call_response = _call_aws("/latest/meta-data/%s" % (path + line))
-            call_response_data = call_response.read()
+            call_response = _call_aws("/latest/meta-data/{0}".format(path + line))
+            call_response_data = call_response.read().decode('utf-8')
             # avoid setting empty grain
             if call_response_data == '':
                 d[line] = None
@@ -59,7 +63,12 @@ def _get_ec2_hostinfo(path=""):
                         data = _snake_caseify_dict(data)
                     d[line] = data
                 except ValueError:
-                    d[line] = call_response_data
+                    if "\n" in call_response_data:
+                        d[line] = []
+                        for dline in call_response_data.split("\n"):
+                            d[line].append(dline)
+                    else:
+                        d[line] = call_response_data
             else:
                 return line
         else:
@@ -87,37 +96,57 @@ def _get_ec2_additional():
     Recursive call in _get_ec2_hostinfo() does not retrieve some of
     the hosts information like region, availability zone or
     architecture.
-
     """
     response = _call_aws("/latest/dynamic/instance-identity/document")
     # _call_aws returns None for all non '200' reponses,
     # catching that here would rule out AWS resource
     if response.status == 200:
         response_data = response.read()
-        data = json.loads(response_data)
-        return _snake_caseify_dict(data)
+        try:
+            data = json.loads(response_data.decode('utf-8'))
+        except ValueError as e:
+            data = {}
+        data = _snake_caseify_dict(data)
+        data.update({'instance_identity': {'document': response_data}})
+        return data
     else:
-       raise httplib.BadStatusLine("Could not read EC2 metadata")
+        raise BadStatusLine("Could not read EC2 metadata")
 
 
 def _get_ec2_user_data():
     """
     Recursive call in _get_ec2_hostinfo() does not retrieve user-data.
-
     """
     response = _call_aws("/latest/user-data")
     # _call_aws returns None for all non '200' reponses,
     # catching that here would rule out AWS resource
     if response.status == 200:
-        response_data = response.read()
+        response_data = response.read().decode('utf-8')
         try:
             return json.loads(response_data)
-        except ValueError as e:
+        except ValueError:
             return response_data
     elif response.status == 404:
         return ''
     else:
-       raise httplib.BadStatusLine("Could not read EC2 user-data")
+        raise BadStatusLine("Could not read EC2 user-data")
+
+
+def _get_instance_identity():
+    """
+    Fill in the details from the instance identity info.
+    """
+    result = {}
+    response = _call_aws('/latest/dynamic/instance-identity/')
+    data = response.read().decode('utf-8')
+    for i in data.split('\n'):
+        if not i or i == 'document':  # document saved in _get_ec2_additional
+            continue
+
+        response = _call_aws('/latest/dynamic/instance-identity/{0}'.format(i))
+        result[i] = response.read()
+
+    return result
 
 
 def ec2_info():
@@ -128,22 +157,23 @@ def ec2_info():
         grains = _get_ec2_additional()
         grains.update({'user-data': _get_ec2_user_data()})
         grains.update(_get_ec2_hostinfo())
-        return {'ec2' : grains}
+        grains['instance_identity'].update(_get_instance_identity())
+        return {'ec2': grains}
 
-    except httplib.BadStatusLine, error:
+    except BadStatusLine as error:
         LOG.debug(error)
         return {}
 
-    except socket.timeout, serr:
-        LOG.info("Could not read EC2 data (timeout): %s" % (serr))
+    except socket.timeout as serr:
+        LOG.info("Could not read EC2 data (timeout): {0}".format(serr))
         return {}
 
-    except socket.error, serr:
-        LOG.info("Could not read EC2 data (error): %s" % (serr))
+    except socket.error as serr:
+        LOG.info("Could not read EC2 data (error): {0}".format(serr))
         return {}
 
-    except IOError, serr:
-        LOG.info("Could not read EC2 data (IOError): %s" % (serr))
+    except IOError as serr:
+        LOG.info("Could not read EC2 data (IOError): {0}".format(serr))
         return {}
 
 
@@ -153,26 +183,25 @@ def ec2_instance_id():
     by pillar-ec2.
     """
     try:
-        instance_id = _get_ec2_hostinfo("instance-id/").values()[0]
-        return {'instance-id' : instance_id}
+        instance_id = list(_get_ec2_hostinfo("instance-id/").values())[0]
+        return {'instance-id': instance_id}
 
-    except httplib.BadStatusLine, error:
+    except BadStatusLine as error:
         LOG.debug(error)
         return {}
 
-    except socket.timeout, serr:
-        LOG.info("Could not read EC2 data (timeout): %s" % (serr))
+    except socket.timeout as serr:
+        LOG.info("Could not read EC2 data (timeout): {0}".format(serr))
         return {}
 
-    except socket.error, serr:
-        LOG.info("Could not read EC2 data (error): %s" % (serr))
+    except socket.error as serr:
+        LOG.info("Could not read EC2 data (error): {0}".format(serr))
         return {}
 
-    except IOError, serr:
-        LOG.info("Could not read EC2 data (IOError): %s" % (serr))
+    except IOError as serr:
+        LOG.info("Could not read EC2 data (IOError): {0}".format(serr))
         return {}
-
 
 if __name__ == "__main__":
-    print ec2_info()
-    print ec2_instance_id()
+    print(ec2_info())
+    print(ec2_instance_id())

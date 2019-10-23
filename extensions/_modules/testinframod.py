@@ -217,7 +217,7 @@ def _copy_function(module_name, name=None):
         for arg in set(parameters).intersection(set(methods)):
             additional_args[arg] = methods.pop(arg)
         try:
-            if len(parameters) > 1:
+            if len(parameters) > 0:
                 modinstance = mod(name, **additional_args)
             else:
                 modinstance = mod()

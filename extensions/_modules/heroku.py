@@ -9,7 +9,8 @@ Module for managing heroku apps.
     master/minion config.
 
     It is possible to use a different API than http://api.heroku.com,
-    by specifying the API URL in config as api_url, or by passing the value directly.
+    by specifying the API URL in config as api_url, or by passing the
+    value directly.
 
     For example:
 
@@ -26,17 +27,14 @@ import logging
 # Import 3rd-party Libs
 # pylint: disable=import-error,no-name-in-module,redefined-builtin
 from salt.ext.six.moves.urllib.parse import urljoin as _urljoin
-from salt.ext.six.moves.urllib.parse import urlencode as _urlencode
-from salt.ext.six.moves import range
 import salt.ext.six.moves.http_client
-
 import salt.utils.http
 
-# pylint: enable=import-error,no-name-in-module,redefined-builtin
 
 log = logging.getLogger(__name__)
 
 __virtualname__ = 'heroku'
+
 
 def __virtual__():
     '''
@@ -46,7 +44,9 @@ def __virtual__():
     '''
     return __virtualname__
 
-def _query(api_key=None, endpoint=None, arguments=None, method='GET', data=None):
+
+def _query(api_key=None, endpoint=None, arguments=None,
+           method='GET', data=None):
     '''
     Heroku object method function to construct and execute on the API URL.
 
@@ -81,13 +81,13 @@ def _query(api_key=None, endpoint=None, arguments=None, method='GET', data=None)
         headers['Authorization'] = 'Bearer {0}'.format(api_key)
         headers['Accept'] = 'application/vnd.heroku+json; version=3'
         if data:
-          data = json.dumps(data)
+            data = json.dumps(data)
 
         if method in ['POST', 'PATCH']:
-          headers['Content-Type'] = 'application/json'
+            headers['Content-Type'] = 'application/json'
     else:
-      log.error('Heroku endpoint not specified')
-      return False
+        log.error('Heroku endpoint not specified')
+        return False
 
     result = salt.utils.http.query(
         url,
@@ -113,7 +113,8 @@ def _query(api_key=None, endpoint=None, arguments=None, method='GET', data=None)
             log.error(result)
         return False
 
-def list_apps(api_key = None):
+
+def list_apps(api_key=None):
     '''
     List all Heroku apps.
 
@@ -128,11 +129,12 @@ def list_apps(api_key = None):
 
     '''
 
-    result = _query(endpoint = 'apps', api_key = api_key)
+    result = _query(endpoint='apps', api_key=api_key)
     log.debug('result {0}'.format(result))
     return result
 
-def app_info(app_name, api_key = None):
+
+def app_info(app_name, api_key=None):
     '''
     Return all info for specificed app. This uses the following heroku call:
     https://devcenter.heroku.com/articles/platform-api-reference#app-info
@@ -141,11 +143,12 @@ def app_info(app_name, api_key = None):
     salt-call heroku.app_info <app_name>
     '''
 
-    result = _query(endpoint='apps', arguments = app_name, api_key = api_key)
+    result = _query(endpoint='apps', arguments=app_name, api_key=api_key)
     log.debug('result {0}'.format(result))
     return result
 
-def list_app_addons(app_name, api_key = None):
+
+def list_app_addons(app_name, api_key=None):
     '''
     List app addons. This uses the following heroku call:
     https://devcenter.heroku.com/articles/platform-api-reference#add-on-list-by-app
@@ -155,12 +158,13 @@ def list_app_addons(app_name, api_key = None):
     '''
 
     result = _query(endpoint='apps',
-               arguments=app_name+'/addons',
-               api_key=api_key)
+                    arguments=app_name+'/addons',
+                    api_key=api_key)
     log.debug('result {0}'.format(result))
     return result
 
-def list_app_attachments(app_name, api_key = None):
+
+def list_app_attachments(app_name, api_key=None):
     '''
     List app add-on attachments. This uses the following heroku call:
     https://devcenter.heroku.com/articles/platform-api-reference#add-on-attachment-list
@@ -170,14 +174,16 @@ def list_app_attachments(app_name, api_key = None):
     '''
 
     result = _query(endpoint='apps',
-               arguments=app_name+'/addon-attachments',
-               api_key=api_key)
+                    arguments=app_name+'/addon-attachments',
+                    api_key=api_key)
     log.debug('result {0}'.format(result))
     return result
 
-def list_app_buildpacks(app_name, api_key = None):
+
+def list_app_buildpacks(app_name, api_key=None):
     '''
-    List an app's existing buildpack installations. This uses the following heroku call:
+    List an app's existing buildpack installations.
+    This uses the following heroku call:
     https://devcenter.heroku.com/articles/platform-api-reference#buildpack-installations-list
 
     CLI Examples:
@@ -185,12 +191,13 @@ def list_app_buildpacks(app_name, api_key = None):
     '''
 
     result = _query(endpoint='apps',
-               arguments=app_name+'/buildpack-installations',
-               api_key=api_key)
+                    arguments=app_name+'/buildpack-installations',
+                    api_key=api_key)
     log.debug('result {0}'.format(result))
     return result
 
-def list_app_config_vars(app_name, api_key = None):
+
+def list_app_config_vars(app_name, api_key=None):
     '''
     List config vars for specified app. This uses the following heroku call:
     https://devcenter.heroku.com/articles/platform-api-reference#config-vars
@@ -199,12 +206,13 @@ def list_app_config_vars(app_name, api_key = None):
     salt-call heroku.list_app_config_vars <app_name>
     '''
     result = _query(endpoint='apps',
-               arguments=app_name+'/config-vars',
-               api_key=api_key)
+                    arguments=app_name+'/config-vars',
+                    api_key=api_key)
     log.debug('result {0}'.format(result))
     return result
 
-def update_app_config_vars(app_name, vars, api_key = None):
+
+def update_app_config_vars(app_name, vars, api_key=None):
     '''
     Update or set config vars. This uses the following heroku call:
     https://devcenter.heroku.com/articles/platform-api-reference#config-vars-update
@@ -217,15 +225,13 @@ def update_app_config_vars(app_name, vars, api_key = None):
       salt-call heroku.update_config_vars <app_name> data='{"name":null}'
     '''
     result = _query(endpoint='apps',
-               arguments=app_name+'/config-vars',
-               api_key=api_key,
-               method='PATCH',
-               data=vars)
+                    arguments=app_name+'/config-vars',
+                    api_key=api_key,
+                    method='PATCH',
+                    data=vars)
 
-    if result:
-      return True
-    else:
-      return False
+    return bool(result)
+
 
 def list_app_dynos(app_name, api_key=None):
     '''
@@ -235,9 +241,11 @@ def list_app_dynos(app_name, api_key=None):
     CLI Examples:
     salt-call heroku.list_app_dynos <app_name>
     '''
-    result = _query(endpoint = 'apps', arguments = app_name+'/dynos', api_key = api_key)
+    result = _query(endpoint='apps', arguments=app_name+'/dynos',
+                    api_key=api_key)
     log.debug('result {0}'.format(result))
     return result
+
 
 def restart_app_dynos(app_name, api_key=None):
     '''
@@ -247,9 +255,11 @@ def restart_app_dynos(app_name, api_key=None):
     CLI Examples:
     salt-call heroku.restart_app_dynos <app_name>
     '''
-    result = _query(endpoint = 'apps', arguments = app_name+'/dynos', method = 'DELETE', api_key = api_key)
+    result = _query(endpoint='apps', arguments=app_name+'/dynos',
+                    method='DELETE', api_key=api_key)
     log.debug('result {0}'.format(result))
     return result
+
 
 def add_app_collaborators(app_name, data, api_key=None):
     '''
@@ -258,14 +268,14 @@ def add_app_collaborators(app_name, data, api_key=None):
 
     CLI Examples:
     - Add and notify collaborator:
-      salt-call heroku.add_collaborators data='{"user":"username@example.com", "silent": false}'
+      salt-call heroku.add_collaborators \
+      data='{"user":"username@example.com","silent": false}'
 
     - Add and do not notify collaborator:
-      salt-call heroku.add_collaborators data='{"user":"username@example.com", "silent": true}'
+      salt-call heroku.add_collaborators \
+      data='{"user":"username@example.com", "silent": true}'
     '''
-    result = _query(endpoint='apps', arguments = app_name + '/collaborators', api_key = api_key, method = 'POST', data = data)
+    result = _query(endpoint='apps', arguments=app_name + '/collaborators',
+                    api_key=api_key, method='POST', data=data)
 
-    if result:
-      return True
-    else:
-      return False
+    return bool(result)

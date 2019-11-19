@@ -43,6 +43,24 @@ __func_alias__ = {
     'set_': 'set'
 }
 
+def ensure_str(s, encoding='utf-8', errors='strict'):
+    """Coerce *s* to `str`.
+
+    For Python 2:
+      - `unicode` -> encoded to `str`
+      - `str` -> `str`
+
+    For Python 3:
+      - `str` -> `str`
+      - `bytes` -> decoded to `str`
+    """
+    if not isinstance(s, (six.text_type, six.binary_type)):
+        raise TypeError("not expecting type '%s'" % type(s))
+    if six.PY2 and isinstance(s, six.text_type):
+        s = s.encode(encoding, errors)
+    elif six.PY3 and isinstance(s, six.binary_type):
+        s = s.decode(encoding, errors)
+    return s
 
 def set_(key, value, profile=None):
     if not profile:
@@ -61,7 +79,7 @@ def get(key, profile=None):
 
     _, result = conn.kv.get(key)
 
-    return six.ensure_str(result['Value']) if result else None
+    return ensure_str(result['Value']) if result else None
 
 
 def get_conn(profile):

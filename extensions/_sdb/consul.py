@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Keeping this in salt-extensions until https://github.com/saltstack/salt/pull/56146 is merged and released
 '''
 Consul sdb Module
 
